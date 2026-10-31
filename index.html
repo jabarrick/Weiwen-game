@@ -316,6 +316,27 @@ html[data-lang="ug"] body,html[data-lang="ug"] button,html[data-lang="ug"] input
 #langbar .lb-btn{padding:2px 7px;background:#2a2e26;border:1px solid #4a5142;color:#b8c0a8;cursor:pointer;font-family:inherit;font-size:12px;border-radius:3px;line-height:1.4}
 #langbar .lb-btn.on{background:#5d6a4a;color:#fff;border-color:#7a8a5a}
 
+
+/* ── 布局修正：手机端语言栏不遮挡标题；开场印章不压按钮 ── */
+.boot-paper{padding-bottom:86px}
+.boot-stamp{bottom:16px;right:24px;font-size:11px}
+@media(max-width:640px){ .wrap{padding-top:38px} #langbar{top:4px;right:4px} }
+/* ── 维吾尔文 RTL ── */
+html[dir="rtl"] .toast{border-left:2px solid var(--ylw);border-right:8px solid var(--ylw);text-align:right}
+html[dir="rtl"] .choice-opts button,html[dir="rtl"] .wiki-nav button,html[dir="rtl"] th{text-align:right}
+html[dir="rtl"] .scene-right{text-align:left}
+html[dir="rtl"] .boot-stamp{right:auto;left:24px}
+html[dir="rtl"] .wiki-nav button.active{box-shadow:inset -3px 0 0 var(--red)!important}
+html[dir="rtl"] #langbar{direction:ltr}
+html[dir="rtl"] .cmap,html[dir="rtl"] .bar-row,html[dir="rtl"] .progress-bar{direction:ltr}
+html[dir="rtl"] .mapd-row{direction:rtl}
+html[dir="rtl"] .wiki-body{padding-right:0;padding-left:8px}
+/* ── 结局：后记 / 他们的声音 ── */
+.go-epi{margin:14px 24px 0;padding:10px 14px;border-top:2px dashed var(--ink2);font-size:12px;line-height:2;color:var(--ink);text-align:start}
+.go-epi h4{font-size:13px;letter-spacing:2px;margin:8px 0 4px;color:#5a4a2a}
+.go-epi .voice{margin:6px 0 8px;padding:6px 10px;border-inline-start:3px solid #8a6a2a;background:rgba(90,70,30,.07);font-style:normal}
+.go-epi .voice i{display:block;font-style:normal;color:var(--ink2);font-size:11px;margin-top:2px}
+.notebook-line{color:#c9a038}
 </style>
 </head>
 <body>
@@ -1616,9 +1637,9 @@ const CHOICE_EVENTS=[
       {label:"按上级要求办，逐桌敬酒（+政绩，民怨剧增）", effect:()=>{ G.performance=Math.min(100,G.performance+4); G.resentment=Math.min(100,G.resentment+12);
         // 移除部分人的拒食标签，但制造巨大民怨
         let c=0; for(const p of G.people){ if(!p.detained&&p.tags.has("t_nodrink")&&Math.random()<0.7){p.tags.delete("t_nodrink");c++;} }
-        return `宴席很「成功」，照片上人人举杯。${c} 人「不再拒食」。上级满意，政绩 +4。但那张笑着举杯的合影里，没有一双眼睛是笑的。民怨 +12。`; }},
+        return _nbt(`宴席很「成功」，照片上人人举杯。${c} 人「不再拒食」。上级满意，政绩 +4。但那张笑着举杯的合影里，没有一双眼睛是笑的。民怨 +12。`,`The banquet was a "success": in every photo, everyone raises a glass. ${c} people "no longer refuse the food." Your superiors are pleased, Merit +4. But in that smiling group toast, not one pair of eyes is smiling. Resentment +12.`,`زىياپەت «مۇۋەپپەقىيەتلىك» بولدى: سۈرەتلەردە ھەممەيلەن رومكا كۆتۈرگەن. ${c} كىشى «ئەمدى يېمەكلىكنى رەت قىلمايدۇ». يۇقىرى رازى، سىياسىي نەتىجە +4. لېكىن كۈلۈپ رومكا كۆتۈرگەن ئۇ سۈرەتتە بىرمۇ كۆز كۈلمەيدۇ. خەلق نارازىلىقى +12.`,`O banquete foi um «sucesso»: em todas as fotografias, todos erguem o copo. ${c} pessoas «já não recusam a comida». Os superiores estão satisfeitos, Mérito +4. Mas naquele brinde de grupo, nem um par de olhos sorri. Ressentimento +12.`); }},
       {label:"睁一只眼闭一只眼，让老人先走（-政绩，-民怨）", effect:()=>{ G.performance=Math.max(0,G.performance-4); G.resentment=Math.max(0,G.resentment-5);
-        return `你让几位老人「身体不适，提前离席」。宴照样办，但你没逼他们。上级若查问，这是个污点，政绩 -4。可有些底线，越过去就回不来了。民怨 -5。`; }},
+        return _nbt(`你让几位老人「身体不适，提前离席」。宴照样办，但你没逼他们。上级若查问，这是个污点，政绩 -4。可有些底线，越过去就回不来了。民怨 -5。`,`You let a few old men "feel unwell and leave early." The banquet went ahead, but you did not force them. If your superiors ask, it is a blot on your record: Merit -4. But some lines, once crossed, cannot be uncrossed. Resentment -5.`,`سىز بىرنەچچە بوۋاينى «ئاغرىپ قالدى، بالدۇر كەتتى» دەپ قويۇۋەتتىڭىز. زىياپەت يەنىلا ئۆتكۈزۈلدى، لېكىن سىز ئۇلارنى مەجبۇرلىمىدىڭىز. يۇقىرى سۈرۈشتۈرسە بۇ بىر داغ، سىياسىي نەتىجە -4. بىراق بەزى چەكلەردىن ئۆتۈپ كەتسە قايتىپ كەلگىلى بولمايدۇ. خەلق نارازىلىقى -5.`,`Deixaste alguns velhos «sentir-se indispostos e sair mais cedo». O banquete realizou-se, mas não os obrigaste. Se os superiores perguntarem, é uma mancha no teu registo: Mérito -4. Mas há limites que, uma vez passados, não têm volta. Ressentimento -5.`); }},
     ]
   },
   {
@@ -1628,9 +1649,9 @@ const CHOICE_EVENTS=[
     opts:[
       {label:"接受交易（+情报，+民怨）", effect:()=>{ G.intelBoost=Math.min(0.5,G.intelBoost+0.08); G.resentment=Math.min(100,G.resentment+5);
         const unk=G.people.filter(p=>!p.detained&&p.tags.has("t_sta")&&!p.staKnown); for(let i=0;i<Math.min(4,unk.length);i++)unk[i].staKnown=true;
-        return `你收下了名单。情报精度 +8%，识别了几名成员。那青年没等到承诺——他父亲的「减刑」从未被提起。民怨 +5。`; }},
+        return _nbt(`你收下了名单。情报精度 +8%，识别了几名成员。那青年没等到承诺——他父亲的「减刑」从未被提起。民怨 +5。`,`You took the list. Intel accuracy +8%; several members identified. The young man never saw the promise kept: his father's "reduced sentence" was never mentioned again. Resentment +5.`,`سىز تىزىملىكنى قوبۇل قىلدىڭىز. ئاخبارات ئېنىقلىقى +8%، بىرنەچچە ئەزا پاش بولدى. ئۇ يىگىت ۋەدىنىڭ ئەمەلگە ئاشقىنىنى كۆرمىدى — دادىسىنىڭ «جازاسىنى يېنىكلىتىش» ئىشى قايتا تىلغا ئېلىنمىدى. خەلق نارازىلىقى +5.`,`Ficaste com a lista. Precisão de informações +8%; vários membros identificados. O rapaz nunca viu a promessa cumprida: a «redução de pena» do pai nunca mais foi mencionada. Ressentimento +5.`); }},
       {label:"拒绝并劝他回家（-政绩）", effect:()=>{ G.performance=Math.max(0,G.performance-3);
-        return `你让他回去了。上级若知道你放走一条「线索」，不会高兴。政绩 -3。但今夜，你睡得着。`; }},
+        return _nbt(`你让他回去了。上级若知道你放走一条「线索」，不会高兴。政绩 -3。但今夜，你睡得着。`,`You sent him home. If your superiors learn you let a "lead" walk away, they will not be pleased. Merit -3. But tonight, you can sleep.`,`سىز ئۇنى ئۆيىگە قايتۇردىڭىز. يۇقىرى سىزنىڭ بىر «يىپ ئۇچى»نى قويۇپ بەرگىنىڭىزنى بىلسە خۇش بولمايدۇ. سىياسىي نەتىجە -3. لېكىن بۈگۈن كېچە ئۇخلىيالايسىز.`,`Mandaste-o para casa. Se os superiores souberem que deixaste fugir uma «pista», não vão gostar. Mérito -3. Mas esta noite consegues dormir.`); }},
     ]
   },
   {
@@ -1639,9 +1660,9 @@ const CHOICE_EVENTS=[
     text:`🧓 一位 80 岁的老人因「国语考试不及格」第三次被要求参加夜校。他的女儿跪在工作组门口，说父亲有心脏病，经不起折腾。镜头就在旁边。`,
     opts:[
       {label:"网开一面（-民怨，-政绩）", effect:()=>{ G.resentment=Math.max(0,G.resentment-4); G.performance=Math.max(0,G.performance-2);
-        return `你签字免除了老人的培训。围观群众低声议论：「这干部还有点人味。」民怨 -4，但「指标未完成」让政绩 -2。`; }},
+        return _nbt(`你签字免除了老人的培训。围观群众低声议论：「这干部还有点人味。」民怨 -4，但「指标未完成」让政绩 -2。`,`You signed the old man's exemption from training. The onlookers murmured: "This cadre still has something human in him." Resentment -4, but the "unmet quota" costs Merit -2.`,`سىز ئىمزا قويۇپ بوۋاينى كۇرستىن كەچۈرۈم قىلدىڭىز. قاراپ تۇرغانلار پىچىرلاشتى: «بۇ كادىردا يەنە ئازراق ئىنسانىيلىق بار ئىكەن.» خەلق نارازىلىقى -4، لېكىن «كۆرسەتكۈچ ئورۇندالمىدى» دەپ سىياسىي نەتىجە -2.`,`Assinaste a dispensa do velho. Os curiosos murmuraram: «Este quadro ainda tem alguma humanidade.» Ressentimento -4, mas a «meta por cumprir» custa Mérito -2.`); }},
       {label:"按规定执行（+政绩，+民怨）", effect:()=>{ G.performance=Math.min(100,G.performance+2); G.resentment=Math.min(100,G.resentment+6);
-        return `「规定就是规定。」老人被搀进了夜校。当晚他在课堂上晕倒。政绩 +2，民怨 +6。那段视频后来流到了境外。`; }},
+        return _nbt(`「规定就是规定。」老人被搀进了夜校。当晚他在课堂上晕倒。政绩 +2，民怨 +6。那段视频后来流到了境外。`,`"Rules are rules." The old man was helped into night school. That evening he collapsed in class. Merit +2, Resentment +6. The video later made its way abroad.`,`«قائىدە دېگەن قائىدە.» بوۋاي يۆلەپ كەچلىك مەكتەپكە ئەكىرىلدى. شۇ كۈنى كەچتە ئۇ دەرسخانىدا ھوشىدىن كەتتى. سىياسىي نەتىجە +2، خەلق نارازىلىقى +6. ئۇ سىن كېيىن چەت ئەلگە تارقالدى.`,`«Regras são regras.» O velho foi amparado até à escola noturna. Nessa noite desmaiou na aula. Mérito +2, Ressentimento +6. O vídeo acabou por chegar ao estrangeiro.`); }},
     ]
   },
   {
@@ -1652,9 +1673,9 @@ const CHOICE_EVENTS=[
       {label:"凑数完成指标（+政绩，+民怨，误抓）", effect:()=>{ G.performance=Math.min(100,G.performance+5); G.resentment=Math.min(100,G.resentment+8);
         const innocent=G.people.filter(p=>!p.detained&&!p.tags.has("t_sta")&&p.tags.size>=1); let c=0;
         for(const p of innocent){ if(c>=6)break; p.detained=true; G.detainedCount++; G.innocentDetained++; c++; }
-        return `你凑齐了数字。${c} 名没什么问题的人被「请进」了教培中心。上级满意，政绩 +5。民怨 +8。他们的家人到现在还不知道为什么。`; }},
+        return _nbt(`你凑齐了数字。${c} 名没什么问题的人被「请进」了教培中心。上级满意，政绩 +5。民怨 +8。他们的家人到现在还不知道为什么。`,`You made the numbers add up. ${c} people with nothing really against them were "invited" into the re-education center. Your superiors are pleased, Merit +5. Resentment +8. Their families still do not know why.`,`سىز ساننى توشقۇزدىڭىز. ھېچقانداق مەسىلىسى يوق ${c} كىشى تەربىيەلەش مەركىزىگە «تەكلىپ قىلىندى». يۇقىرى رازى، سىياسىي نەتىجە +5. خەلق نارازىلىقى +8. ئۇلارنىڭ ئائىلىسى ھازىرغىچە سەۋەبىنى بىلمەيدۇ.`,`Fizeste os números baterem certo. ${c} pessoas sem nada de concreto contra elas foram «convidadas» para o centro de reeducação. Os superiores estão satisfeitos, Mérito +5. Ressentimento +8. As famílias ainda não sabem porquê.`); }},
       {label:"如实上报缺口（-政绩）", effect:()=>{ G.performance=Math.max(0,G.performance-6);
-        return `你在报表上写下了真实数字。上级回复只有四个字：「工作不力」。政绩 -6。但没有人因为一个指标而被关进去。`; }},
+        return _nbt(`你在报表上写下了真实数字。上级回复只有四个字：「工作不力」。政绩 -6。但没有人因为一个指标而被关进去。`,`You wrote the real number in the report. Your superiors replied with two words: "Ineffective work." Merit -6. But no one was locked up to fill a quota.`,`سىز دوكلاتقا ھەقىقىي ساننى يازدىڭىز. يۇقىرىنىڭ جاۋابى پەقەت بىر جۈملە: «خىزمەت ئۈنۈمسىز». سىياسىي نەتىجە -6. لېكىن ھېچكىم بىر كۆرسەتكۈچ ئۈچۈن قامالمىدى.`,`Escreveste o número verdadeiro no relatório. A resposta dos superiores foram duas palavras: «Trabalho ineficaz.» Mérito -6. Mas ninguém foi preso para cumprir uma quota.`); }},
     ]
   },
   {
@@ -1664,11 +1685,11 @@ const CHOICE_EVENTS=[
     opts:[
       {label:"高调宣传其转化（+政绩，赌一把）", effect:()=>{ G.performance=Math.min(100,G.performance+4);
         if(Math.random()<0.5){ const t=G.people.find(p=>!p.detained&&p.tags.has("t_sta")&&p.staKnown); if(t){t.tags.delete("t_sta");t.staKnown=false;}
-          return `他在镜头前痛哭流涕，效果极佳，还真带动了一人脱离组织。政绩 +4。宣传部门很满意。`; }
+          return _nbt(`他在镜头前痛哭流涕，效果极佳，还真带动了一人脱离组织。政绩 +4。宣传部门很满意。`,`He wept bitterly on camera. It played extremely well, and one more person actually left the organization. Merit +4. The propaganda department is delighted.`,`ئۇ كامېرا ئالدىدا ھۆڭرەپ يىغلىدى، ئۈنۈمى ناھايىتى ياخشى بولدى، ھەتتا يەنە بىر كىشى تەشكىلاتتىن ئايرىلدى. سىياسىي نەتىجە +4. تەشۋىقات بۆلۈمى ناھايىتى رازى.`,`Chorou copiosamente diante da câmara. Resultou muitíssimo bem, e mais uma pessoa chegou mesmo a sair da organização. Mérito +4. O departamento de propaganda está encantado.`); }
         else { G.resentment=Math.min(100,G.resentment+5);
-          return `宣传播出三天后，他「失联」了——带着你给的通行证。政绩 +4 的喜报已经发出，撤不回来了。民怨 +5。`; } }},
+          return _nbt(`宣传播出三天后，他「失联」了——带着你给的通行证。政绩 +4 的喜报已经发出，撤不回来了。民怨 +5。`,`Three days after the broadcast he "lost contact" — taking with him the pass you gave him. The good-news bulletin (Merit +4) has already gone out and cannot be recalled. Resentment +5.`,`تەشۋىقات تارقىتىلىپ ئۈچ كۈندىن كېيىن ئۇ «ئالاقىسىنى ئۈزدى» — سىز بەرگەن يول خېتىنى ئېلىپ. سىياسىي نەتىجە +4 لىك خۇش خەۋەر ئاللىبۇرۇن تارقىتىلغان، قايتۇرۇۋالغىلى بولمايدۇ. خەلق نارازىلىقى +5.`,`Três dias depois da emissão, ele «perdeu o contacto» — levando o salvo-conduto que lhe deste. O boletim de boas notícias (Mérito +4) já saiu e não pode ser retirado. Ressentimento +5.`); } }},
       {label:"低调审查后再说（稳妥）", effect:()=>{ G.intelBoost=Math.min(0.5,G.intelBoost+0.03);
-        return `你没急着宣传，而是先摸清他的底。审讯中他供出了两条有用线索。情报精度 +3%。没有作秀，但也没有翻车。`; }},
+        return _nbt(`你没急着宣传，而是先摸清他的底。审讯中他供出了两条有用线索。情报精度 +3%。没有作秀，但也没有翻车。`,`You did not rush to publicize him; first you found out who he really was. Under questioning he gave up two useful leads. Intel accuracy +3%. No show, but no disaster either.`,`سىز تەشۋىق قىلىشقا ئالدىرىمىدىڭىز، ئالدى بىلەن ئۇنىڭ ئەسلىنى ئېنىقلىدىڭىز. سوراقتا ئۇ ئىككى پايدىلىق يىپ ئۇچىنى ئېيتتى. ئاخبارات ئېنىقلىقى +3%. نومۇش يوق، لېكىن پاجىئەمۇ يوق.`,`Não te apressaste a fazer propaganda; primeiro descobriste quem ele era. No interrogatório revelou duas pistas úteis. Precisão de informações +3%. Sem espetáculo, mas também sem desastre.`); }},
     ]
   },
 ];
@@ -1691,8 +1712,11 @@ function resolveChoice(optIndex){
   const ev=G._choiceRef;
   const opt=ev.opts[optIndex];
   const result=opt.effect();
-  addNews((typeof _nbt==="function")?_nbt(`🎯 【你的抉择】${ev.text.replace(/^[^\s]+\s/,'').slice(0,40)}…… → ${result}`,`🎯 【Your Choice】${ev.text.replace(/^[^\s]+\s/,'').slice(0,40)}…… → ${result}`,`🎯 【سىزنىڭ قارارىڭىز】${ev.text.replace(/^[^\s]+\s/,'').slice(0,40)}…… → ${result}`):`🎯 【你的抉择】${ev.text.replace(/^[^\s]+\s/,'').slice(0,40)}…… → ${result}`);
-  showToast(result.slice(0,60));
+  { const _cut=(s,n)=>{ s=String(s).replace(/<[^>]+>/g,"").replace(/^[^\s]+\s/,""); return s.length>n?s.slice(0,n)+"……":s; };
+    const _tx=L=>_cut((typeof _chT==="function")?_chT(ev.text,L):_TL(L,ev.text),L==="zh"?40:110);
+    const _r=String(result);
+    addNews(_nbt(`🎯 【你的抉择】${_tx("zh")} → ${_r}`,`🎯 【Your Choice】${_tx("en")} → ${_r}`,`🎯 【سىزنىڭ قارارىڭىز】${_tx("ug")} → ${_r}`,`🎯 【A tua escolha】${_tx("pt")} → ${_r}`)); }
+  showToast(String(result).replace(/<[^>]+>/g,"").slice(0,90));
   if(typeof mapPingXY==="function") mapPingXY(HQ.x+Math.random()*8-4,HQ.y+Math.random()*6-3,"choice","加急电报抉择","指挥部");
   G.pendingChoice=null; G._choiceRef=null;
   SFX.paper();
@@ -3045,7 +3069,7 @@ function render(){
     <div class="scene-in">
       <div><h1>★ ${C.country}·${C.city}维稳指挥系统</h1><div class="sub">指挥长：${C.player} ｜ 机密 ｜ 任期剩余 ${yearsLeft} 年</div></div>
       <div class="scene-right"><div class="wk">${ywLabel(G.week)}</div><div class="wksub">总第${G.week}周</div>
-        <button class="icon-btn" onclick="SFX.toggle()" title="音效开关 (M)">${SFX.muted?"♪ 关":"♪ 开"}</button>
+        <button class="icon-btn" onclick="SFX.toggle()" title="${_dd("音效开关 (M)","Sound on/off (M)","ئاۋاز ئېچىش/ئېتىش (M)","Som ligado/desligado (M)")}">${SFX.muted?"♪ 关":"♪ 开"}</button>
       </div>
     </div>
   </div>
@@ -3726,6 +3750,7 @@ function translateDOM(root){
   }});
   const arr=[]; let n; while(n=w.nextNode()) arr.push(n);
   for(const nd of arr){ const r=_translateStr(nd.nodeValue); if(r!==null) nd.nodeValue=r; }
+  if(LANG==="ug"){ for(const nd of arr){ const v=nd.nodeValue; if(v.indexOf("⁦")<0&&/[+\-−×]?\d/.test(v)&&/[؀-ۿ]/.test(v)){ const w=v.replace(/(?<![A-Za-z\d.])([+\-−×=]?\d+(?:[.,:\/\-–]\d+)*%?)/g,"⁦$1⁩"); if(w!==v) nd.nodeValue=w; } } }
 }
 
 // 固定专有名词替换（用于已翻译文本中残留的 ${C.org} 等插值）
@@ -3745,10 +3770,16 @@ function _translitName(run){ const sn=_SNAME[LANG]||{}, gn=_GNAME[LANG]||{}; let
   if(LANG==="en"&&out) out=out.charAt(0).toUpperCase()+out.slice(1);
   return out||run;
 }
-function _dd(z,e,u){ const L=(typeof LANG==="undefined")?"zh":LANG; return L==="en"?e:L==="ug"?u:z; }
+function _dd(z,e,u,p){ const L=(typeof LANG==="undefined")?"zh":LANG; return L==="en"?e:L==="pt"?(p!=null?p:((typeof _P==="function")?_P(e):e)):L==="ug"?u:z; }
+// 按指定语言查 I18N（中文为键）
+function _TL(L,zh){ if(L==="zh"||zh==null) return zh; const d=I18N[L]; return (d&&Object.prototype.hasOwnProperty.call(d,zh))?d[zh]:zh; }
+// 按当前语言的年周标签（不经 DOM 规则）
+function ywLabelL(w){ const y=ywYear(w), k=ywWeek(w); return _dd(`第${y}年${k}周`,`Y${y} W${k}`,`${y}-يىل ${k}-ھەپتە`,`Ano ${y}, sem. ${k}`); }
+// 指定语言的收藏品名
+function _itN(it,L){ if(L==="zh") return it.name; const t=ITEM_I18N[L]; return (t&&t[it.id])?t[it.id].name:it.name; }
 // ══ 三语通报存储：生成时同时记录 zh/en/ug，渲染按当前语言取 ══
 const _ST3=[];               // 本条通报生成过程中出现的翻译三元组
-function _stash3(zh,en,ug){ _ST3.push({zh,en,ug}); if(_ST3.length>24)_ST3.shift(); }
+function _stash3(zh,en,ug,pt){ _ST3.push({zh,en,ug,pt:(pt!=null?pt:((typeof _P==="function")?_P(en):en))}); if(_ST3.length>40)_ST3.shift(); }
 function _inLang(L,fn){ const o=LANG; LANG=L; try{ return fn(); } finally{ LANG=o; } }
 function _TT3(zh){ const e=(I18N.en&&I18N.en[zh])||zh, u=(I18N.ug&&I18N.ug[zh])||zh; _stash3(zh,e,u); const L=(typeof LANG==="undefined")?"zh":LANG; return L==="en"?e:L==="ug"?u:zh; }
 const _PN3=[
@@ -3804,7 +3835,10 @@ function _pnoun(s){ if(typeof LANG==="undefined"||LANG==="zh"||!s) return s; con
       let i=0, ok=true; while(i<run.length){ let m=false; for(let len=3;len>=2;len--){ if(sn[run.substr(i,len)]){ i+=len; m=true; break; } } if(m)continue; if(gn[run[i]]){ i++; } else { ok=false; break; } }
       return ok?_translitName(run):run; }); }
   return s; }
-function _applyLangAttr(){ document.documentElement.setAttribute("data-lang",LANG); }
+function _applyLangAttr(){ const h=document.documentElement; h.setAttribute("data-lang",LANG);
+  h.setAttribute("lang",{zh:"zh-CN",en:"en",ug:"ug",pt:"pt-PT"}[LANG]||"zh-CN");
+  h.setAttribute("dir",LANG==="ug"?"rtl":"ltr");
+  try{ document.title=_dd("达尔坎斯坦·卡拉城维稳指挥系统","Darkanstan · Kala City Stability-Maintenance Command System","دارقانستان · كالا شەھىرى مۇقىملىقنى ساقلاش قوماندانلىق سىستېمىسى","Darkanstão · Sistema de Comando de Manutenção da Estabilidade da Cidade de Kala"); }catch(e){} }
 function _mountLangBar(){
   let bar=document.getElementById("langbar");
   if(!bar){ bar=document.createElement("div"); bar.id="langbar"; document.body.appendChild(bar); }
@@ -4983,7 +5017,7 @@ function bootNew(){
   if(hasSave()&&!_bootConfirm){
     _bootConfirm=true;
     const b=document.getElementById("boot-new");
-    if(b){b.textContent="⚠ 将覆盖已有存档——再点一次确认";b.classList.add("warn");}
+    if(b){b.textContent=_dd("⚠ 将覆盖已有存档——再点一次确认","⚠ This will overwrite your save — click again to confirm","⚠ ساقلانما ئۆچۈرۈلىدۇ — جەزملەش ئۈچۈن يەنە بىر قېتىم بېسىڭ","⚠ Isto apaga o jogo guardado — clica outra vez para confirmar");b.classList.add("warn");}
     return;
   }
   _bootConfirm=false;
@@ -5309,11 +5343,13 @@ function wikiHTML(){
 // ══════════════════════════════════════════════════════════
 function _rint(a,b){return Math.floor(Math.random()*(b-a+1))+a;}
 function _nL(){ return (typeof LANG==="undefined")?"zh":LANG; }
-function _nbt(z,e,u){ const L=_nL();
+function _nbt(z,e,u,p){ const L=_nL();
   const ep=(typeof _pnoun==="function")?_inLang("en",()=>_pnoun(e)):e;
   const up=(typeof _pnoun==="function")?_inLang("ug",()=>_pnoun(u)):u;
-  if(typeof _stash3==="function") _stash3(z,ep,up);
-  return L==="zh"?z:(L==="en"?ep:up); }
+  let pp=(p!=null)?p:((typeof _P==="function")?_P(e):e);
+  if(typeof _pnoun==="function"&&typeof _PNOUN!=="undefined"&&_PNOUN.pt) pp=_inLang("pt",()=>_pnoun(pp));
+  if(typeof _stash3==="function") _stash3(z,ep,up,pp);
+  return L==="zh"?z:L==="en"?ep:L==="pt"?pp:up; }
 function _fxApply(fx, agg){
   const parts=[]; const L=_nL();
   if(fx.perf){
@@ -5900,7 +5936,7 @@ function mapHTML(){
       <span class="detail-stats dim">点击任意城区 → 放大为街区详图 · 触发情节</span>
     </div>
     <div class="mapmain">
-      <img class="cmap" onclick="mapClick(event)" src="${mapDataURL()}" alt="${C.city}城区图">
+      <img class="cmap" onclick="mapClick(event)" src="${mapDataURL()}" alt="${_dd(C.city+"城区图","Kala City district map","كالا شەھىرى رايون خەرىتىسى","Mapa de distritos da Cidade de Kala")}">
       <div class="maplegend">
         <button class="map-toggle${showUnrest?" on":""}" onclick="G.mapShowUnrest=${showUnrest?"false":"true"};render()">🔧 调试视图（隐藏参数：未建档底数·真实${C.org}分布）：${showUnrest?"开":"关"}</button>
         ${legend}
@@ -6285,7 +6321,7 @@ function resolveStory(sid,optI){
   if(!G.storyFired)G.storyFired=[]; if(s.once&&G.storyFired.indexOf(sid)<0)G.storyFired.push(sid);
   const d=_DBYID[s.did];
   const _lbl=opt?_sx(opt.label).replace(/（.*?）/g,"").replace(/\(.*?\)/g,""):"";
-  addNews(`🎭【${d.name}·${_sx(s.name)}】${_lbl} —— ${_sx(result)}`);
+  addNews(`🎭【${_TT3(d.name)}·${_sx(s.name)}】${_lbl} —— ${_sx(result)}`);
   if(typeof mapPingXY==="function"){ const geo=_buildGeo(); const c0=geo.cent[d.idx];
     mapPingXY(c0.x+(Math.random()*12-6),c0.y+(Math.random()*12-6),"choice",s.name,d.name); }
   G.resentment=Math.max(0,Math.min(100,G.resentment));
@@ -6333,7 +6369,7 @@ function mapDetailHTML(){
       <span class="detail-stats">人口 ${s.pop} · 自由 ${s.free} · 在押 <b style="color:var(--red2)">${s.det}</b> · 已识别 <b style="color:var(--pur)">${s.known}</b> · 威胁 <span style="color:${tcol}">${Math.round(threat*100)}%</span></span>
     </div>
     <div class="mapmain">
-      <img class="cmap detail" onclick="detailClick(event)" src="${mapDetailDataURL(did)}" alt="${d.name}街区详图">
+      <img class="cmap detail" onclick="detailClick(event)" src="${mapDetailDataURL(did)}" alt="${_dd(d.name+"街区详图",_TL("en",d.name)+" block map",_TL("ug",d.name)+" مەھەللە خەرىتىسى","Mapa do bairro: "+_TL("pt",d.name))}">
       <div class="map-hint dim">🏛 = 剧情地点（点击图上标记或右下「进入」触发情节）｜ 圆点=家族（与城区图同源）｜ 数据与主图实时一致</div>
     </div>
     <div class="mapbelow">
@@ -7458,8 +7494,11 @@ function dropItem(id){
   if(G.collection.some(x=>x.id===id)) return false;  // 已有则不重复
   const it=_ITEM_BY_ID[id]; if(!it) return false;
   G.collection.push({id, w:G.week});
-  addNews((typeof _nbt==="function")?_nbt(`🎁 收藏 ▸ 你留下了一件遗物：【${itemNameL(it)}】（${RARITY[it.rarity].n}）—— 已收入「收藏柜」。`,`🎁 Collection ▸ You have kept a relic: 【${itemNameL(it)}】(${RARITY[it.rarity].n})—— now stored in the "display cabinet."`,`🎁 توپلام ▸ سىز بىر يادىكارلىق قالدۇردىڭىز: 【${itemNameL(it)}】(${RARITY[it.rarity].n}) —— «توپلام ئىشكابى»غا كىرگۈزۈلدى.`):`🎁 收藏 ▸ 你留下了一件遗物：【${itemNameL(it)}】（${RARITY[it.rarity].n}）—— 已收入「收藏柜」。`);
-  if(typeof showToast==="function") showToast(`🎁 获得收藏品：${itemNameL(it)}`);
+  { const rn=RARITY[it.rarity].n;
+    const _st=[it.name,_itN(it,"en"),_itN(it,"ug"),_itN(it,"pt")];
+    _stash3(_st[0],_st[1],_st[2],_st[3]);
+    addNews(_nbt(`🎁 收藏 ▸ 你留下了一件遗物：【${_st[0]}】（${rn}）—— 已收入「收藏柜」。`,`🎁 Collection ▸ You have kept a relic: 【${_st[1]}】(${_TL("en",rn)}) —— now stored in the display cabinet.`,`🎁 توپلام ▸ سىز بىر يادىكارلىق قالدۇردىڭىز: 【${_st[2]}】(${_TL("ug",rn)}) —— «يادىكارلىق ئىشكابى»غا كىرگۈزۈلدى.`,`🎁 Coleção ▸ Guardaste uma relíquia: 【${_st[3]}】(${_TL("pt",rn)}) —— agora está na vitrine.`)); }
+  if(typeof showToast==="function") showToast(_dd(`🎁 获得收藏品：${itemNameL(it)}`,`🎁 Relic kept: ${itemNameL(it)}`,`🎁 يادىكارلىق قالدۇرۇلدى: ${itemNameL(it)}`,`🎁 Relíquia guardada: ${itemNameL(it)}`));
   if(typeof SFX!=="undefined"){ SFX.tone(880,0.08,"triangle",0.06); SFX.tone(1320,0.12,"triangle",0.06,0.09); }
   return true;
 }
@@ -7486,7 +7525,7 @@ function collectionHTML(){
         <img class="item-img big" src="${itemURL(view.id)}" alt="">
         <div style="flex:1;min-width:0">
           <div style="font-size:15px;font-weight:900;letter-spacing:1px;color:${r.f}">${itemNameL(view)}</div>
-          <div style="font-size:11px;margin:3px 0"><span style="color:${r.f};font-weight:700">◆ ${r.n}</span> <span class="ink2">· ${(typeof TT==="function")?TT("得自"):"得自"} ${(typeof fromL==="function")?fromL(view.from):view.from}${wmap[view.id]?` · ${ywLabel(wmap[view.id])}`:""}</span></div>
+          <div style="font-size:11px;margin:3px 0"><span style="color:${r.f};font-weight:700">◆ ${r.n}</span> <span class="ink2">· ${(typeof TT==="function")?TT("得自"):"得自"} ${(typeof fromL==="function")?fromL(view.from):view.from}${wmap[view.id]?` · ${ywLabelL(wmap[view.id])}`:""}</span></div>
           <div style="font-size:12px;line-height:1.9;color:var(--ink);margin-top:6px">${itemDescL(view)}</div>
         </div>
       </div>
