@@ -337,6 +337,10 @@ html[dir="rtl"] .wiki-body{padding-right:0;padding-left:8px}
 .go-epi .voice{margin:6px 0 8px;padding:6px 10px;border-inline-start:3px solid #8a6a2a;background:rgba(90,70,30,.07);font-style:normal}
 .go-epi .voice i{display:block;font-style:normal;color:var(--ink2);font-size:11px;margin-top:2px}
 .notebook-line{color:#c9a038}
+
+.go-stamp{position:relative;top:auto;right:auto;display:table;margin:18px 28px -2px auto;max-width:70%;text-align:center;font-size:15px}
+html[dir="rtl"] .go-stamp{margin:18px auto -2px 28px}
+@media(max-width:640px){ .go-stamp{top:auto;bottom:auto;font-size:13px;margin:14px 14px 0 auto} .go-epi{margin:12px 10px 0} .go-ending{margin:12px 10px} .go-body{padding:4px 10px} }
 </style>
 </head>
 <body>
@@ -1697,12 +1701,20 @@ const CHOICE_EVENTS=[
 let _choiceFired=new Set();
 function tryChoiceEvent(){
   if(G.pendingChoice) return false;
-  // 每个抉择事件整局只触发一次；每周约 6% 概率从符合条件的池中抽一个
-  if(Math.random()>0.06) return false;
-  const pool=CHOICE_EVENTS.filter(e=>!_choiceFired.has(e.id)&&e.cond());
-  if(pool.length===0) return false;
-  const ev=pool[Math.floor(Math.random()*pool.length)];
-  G.pendingChoice={id:ev.id, text:ev.text, opts:ev.opts.map((o,i)=>({label:o.label, i}))};
+  // 每个抉择事件整局只触发一次。优先事件（清算）条件满足时每周 50% 到来；
+  // 其余每周约 7% 概率从符合条件的池中抽一个，且与上一封电报至少间隔 3 周。
+  let ev=null;
+  const pri=CHOICE_EVENTS.filter(e=>e.pri&&!_choiceFired.has(e.id)&&e.cond());
+  if(pri.length && Math.random()<0.5) ev=pri[0];
+  if(!ev){
+    if(G.week-(G.lastChoiceW||0)<3) return false;
+    if(Math.random()>0.07) return false;
+    const pool=CHOICE_EVENTS.filter(e=>!e.pri&&!_choiceFired.has(e.id)&&e.cond());
+    if(pool.length===0) return false;
+    ev=pool[Math.floor(Math.random()*pool.length)];
+  }
+  G.lastChoiceW=G.week;
+  G.pendingChoice={id:ev.id, text:_choiceText(ev), opts:_choiceOpts(ev)};
   G._choiceRef=ev; // 暂存引用
   _choiceFired.add(ev.id);
   return true;
@@ -1712,8 +1724,9 @@ function resolveChoice(optIndex){
   const ev=G._choiceRef;
   const opt=ev.opts[optIndex];
   const result=opt.effect();
+  { const mm=(typeof _CH_MORAL!=="undefined")&&_CH_MORAL[ev.id]; if(mm){ const v=mm[optIndex]||0; if(v>0)_cs(v); else if(v<0)_cp(-v); } }
   { const _cut=(s,n)=>{ s=String(s).replace(/<[^>]+>/g,"").replace(/^[^\s]+\s/,""); return s.length>n?s.slice(0,n)+"……":s; };
-    const _tx=L=>_cut((typeof _chT==="function")?_chT(ev.text,L):_TL(L,ev.text),L==="zh"?40:110);
+    const _tx=L=>_cut(_chT((G.pendingChoice&&G.pendingChoice.text)||ev.text,L),L==="zh"?40:110);
     const _r=String(result);
     addNews(_nbt(`🎯 【你的抉择】${_tx("zh")} → ${_r}`,`🎯 【Your Choice】${_tx("en")} → ${_r}`,`🎯 【سىزنىڭ قارارىڭىز】${_tx("ug")} → ${_r}`,`🎯 【A tua escolha】${_tx("pt")} → ${_r}`)); }
   showToast(String(result).replace(/<[^>]+>/g,"").slice(0,90));
@@ -1861,6 +1874,7 @@ function initGame(){
     mapZoom:null, pendingStory:null, storyFired:[],  // 二级地图 / 剧情
     filterDistrict:null,  // 人口页城区筛选
     collection:[], eventSpawned:[], itemView:null,  // 收藏品 / 随机情节
+    arc:{}, conscience:0, complicity:0, notebook:0, lastChoiceW:0, releasedCount:0, releasedKept:0,  // v8：人物线 / 良知 / 私人笔记
     newsLog:[
       {w:1,t:`${C.player}同志抵达${C.city}就任维稳指挥长。`,atk:false},
       {w:1,t:`上级机密简报：「${C.org}」（世界塔里人解放协会）在${C.city}地下活动，呈家族性分布，估计成员数十人。具体身份与规模均不明，需通过情报手段逐步识别。`,atk:false},
@@ -2484,7 +2498,7 @@ function aiStep(){
 
 function aiAdvanceWeek(){
   if(G.gameOver) { aiStop(); return; }
-  if(G.pendingChoice){ resolveChoice(1); }
+  if(G.pendingChoice){ const _ev=G._choiceRef; resolveChoice(_ev&&_ev.aiPick!=null?_ev.aiPick:(G.pendingChoice.opts.some(o=>o.i===1)?1:G.pendingChoice.opts[0].i)); }
   let guard=0;
   while(aiStep() && guard<16){ guard++; }
   if(!G.gameOver) advanceWeek();
@@ -3012,6 +3026,7 @@ function render(){
   const app=document.getElementById("app");
 
   if(G.gameOver){
+    if(typeof RESIST_END!=="undefined"&&RESIST_END[G.gameOver]){ app.innerHTML=resistEndHTML(); return; }
     const win=G.gameOver==="win";
     const freeSta=getFreeSta();
     const years=Math.floor(G.week/52), wks=G.week%52;
@@ -3044,6 +3059,7 @@ function render(){
         ${win?`<p class="go-quote">${G.detainedCount>0?_bt(`那 ${G.detainedCount} 个被「教育」的人——他们什么时候能回家？<br>`,`Those ${G.detainedCount} people who were "re-educated" — when do they get to go home?<br>`,`«تەربىيەلەنگەن» شۇ ${G.detainedCount} كىشى — ئۇلار قاچان ئۆيىگە قايتالايدۇ؟<br>`):""}${_bt("一个组织可以被瓦解。<br>但被碾碎的普通人，谁来拼回？","An organization can be dismantled.<br>But the ordinary people it ground up — who will put them back together?","بىر تەشكىلاتنى يوقىتىشقا بولىدۇ.<br>ئەمما ئېزىلىپ كەتكەن ئاددىي كىشىلەرنى كىم قايتا پۈتۈن قىلىدۇ؟")}</p>`
         :`<p class="go-quote">${_bt("铁拳越重，反弹越烈。","The heavier the iron fist, the fiercer the backlash.","تۆمۈر مۇشت قانچە ئېغىر بولسا، قايتما زەربىمۇ شۇنچە قاتتىق بولىدۇ.")}</p>`}
       </div>
+      ${(typeof epilogueHTML==="function")?epilogueHTML():""}
       <div class="go-btns"><button class="mbtn" onclick="initGame();render()">${_bt("✒ 重新开始（新任期）","✒ Restart (new term)","✒ قايتا باشلاش (يېڭى مۇددەت)")}</button></div>
       <div class="go-foot">${_bt("本游戏设定于虚构国家「"+C.country+"」。如有雷同，说明你读过新闻。","This game is set in the fictional nation of 「"+CY+"」. Any resemblance means you've been reading the news.","بۇ ئويۇن خىيالىي دۆلەت «"+CY+"»دا يۈز بېرىدۇ. ئوخشاشلىق بولسا، دېمەك سىز خەۋەرلەرنى ئوقۇغانسىز.")}</div>
     </div></div>`;
@@ -3106,8 +3122,8 @@ function render(){
     const pc=G.pendingChoice;
     html+=`<div class="choice paper">
       <div class="choice-h">⚡ 加急电报 · 需要你的决定</div>
-      <div class="choice-t">${pc.text}</div>
-      <div class="choice-opts">${pc.opts.map(o=>`<button onclick="resolveChoice(${o.i})">${o.label}</button>`).join("")}</div>
+      <div class="choice-t">${_L4(pc.text)}</div>
+      <div class="choice-opts">${pc.opts.map(o=>`<button onclick="resolveChoice(${o.i})">${_L4(o.label)}</button>`).join("")}</div>
     </div>`;
   }
 
@@ -3123,6 +3139,7 @@ function render(){
       ${G.patrolWeeks>0?`<p style="color:var(--blu)">${(typeof _dd==="function")?_dd(`🚔 巡逻活跃（剩${G.patrolWeeks}周）：袭击率-50%`,`🚔 Patrol active (${G.patrolWeeks} wks left): attack rate -50%`,`🚔 نۆۋەتچىلىك ئاكتىپ (${G.patrolWeeks} ھەپتە قالدى): ھۇجۇم -50%`):`🚔 巡逻活跃（剩${G.patrolWeeks}周）：袭击率-50%`}</p>`:""}
       ${G.cameraOn?`<p style="color:var(--blu)">${(typeof _dd==="function")?_dd(`📷 天网运行中：Lv.3-4袭击率-40% ｜ 情报+10%（防袭效果随时长缓慢衰减）`,`📷 Skynet active: Lv.3-4 attack rate -40% ｜ Intel +10% (protection slowly decays)`,`📷 Skynet ئىشلەۋاتىدۇ: Lv.3-4 ھۇجۇم -40% ｜ ئاخبارات +10% (مۇداپىئە ئاستا سۇسلىشىدۇ)`):`📷 天网运行中：Lv.3-4袭击率-40% ｜ 情报+10%（防袭效果随时长缓慢衰减）`}</p>`:""}
     </div>
+    ${(G.notebook||0)>0?`<p class="notebook-line" style="font-size:12px;margin-top:6px">📓 ${_dd(`私人笔记：${G.notebook} 页 —— 你记下的，系统不会记。`,`Private notebook: ${G.notebook} pages — what you wrote down, the system never will.`,`شەخسىي خاتىرە: ${G.notebook} بەت — سىز خاتىرىلىگەننى سىستېما خاتىرىلىمەيدۇ.`,`Caderno privado: ${G.notebook} páginas — o que tu anotaste, o sistema nunca anotará.`)}</p>`:""}
     <div class="info">
       <div style="margin-bottom:6px">民怨影响</div>
       ${G.resentment<40?`<p style="color:var(--grn)">✅ 民众情绪尚可，弹性标签自然回落中</p>`:""}
@@ -3660,6 +3677,7 @@ const I18N={
  }
 };
 
+I18N.en["加急电报抉择"]="Urgent cable decision"; I18N.ug["加急电报抉择"]="جىددىي تېلېگرامما قارارى";
 function TT(zh){ if(LANG==="zh"||zh==null) return zh; const d=I18N[LANG]; if(d&&Object.prototype.hasOwnProperty.call(d,zh)) return d[zh]; return zh; }
 function TM(id,f,zh){
   if(f==="name"&&typeof _stash3==="function"&&I18N.en&&I18N.en._m&&I18N.en._m[id]){
@@ -4929,7 +4947,7 @@ function saveGame(force){
     base.pendingChoice=G.pendingChoice?{id:G.pendingChoice.id}:null;
     base.aiRunning=false;
     const payload={
-      v:2,
+      v:3,
       fams:G.families.map(f=>[f.id,f.surname,+f.religiosity.toFixed(4),+f.risk.toFixed(4),f.infected?1:0]),
       ppl:G.people.map(p=>[p.id,p.name,p.age,p.fid,[...p.tags].map(t=>TAG_IDX[t]).filter(i=>i!==undefined),(p.detained?1:0)|(p.staKnown?2:0)|(p.scanned?4:0)]),
       base,
@@ -4944,7 +4962,7 @@ function hasSave(){
     const raw=localStorage.getItem(SAVE_KEY);
     if(!raw)return null;
     const s=JSON.parse(raw);
-    return (s&&s.v===2&&s.base&&!s.base.gameOver)?{week:s.base.week}:null;
+    return (s&&(s.v===2||s.v===3)&&s.base&&!s.base.gameOver)?{week:s.base.week}:null;
   }catch(e){return null}
 }
 function loadGame(){
@@ -4953,7 +4971,7 @@ function loadGame(){
     const raw=localStorage.getItem(SAVE_KEY);
     if(!raw)return false;
     const s=JSON.parse(raw);
-    if(!s||s.v!==2)return false;
+    if(!s||(s.v!==2&&s.v!==3))return false;
     const families=s.fams.map(a=>({id:a[0],surname:a[1],religiosity:a[2],risk:a[3],infected:!!a[4]}));
     const people=s.ppl.map(a=>({id:a[0],name:a[1],age:a[2],fid:a[3],tags:new Set(a[4].map(i=>ALL_TAGS[i].id)),detained:!!(a[5]&1),staKnown:!!(a[5]&2),scanned:!!(a[5]&4)}));
     initGame();
@@ -4970,10 +4988,13 @@ function loadGame(){
     if(G.filterDistrict===undefined) G.filterDistrict=null;
     if(!Array.isArray(G.collection)) G.collection=[];
     if(!Array.isArray(G.eventSpawned)) G.eventSpawned=[]; G.itemView=null;
+    // v2 → v3 迁移：人物线 / 良知 / 私人笔记
+    if(!G.arc||typeof G.arc!=="object") G.arc={};
+    for(const k of ["conscience","complicity","notebook","lastChoiceW","releasedCount","releasedKept"]) if(typeof G[k]!=="number") G[k]=0;
     _choiceFired=new Set(s.fired||[]);
     if(pc&&pc.id){
       const ev=CHOICE_EVENTS.find(e=>e.id===pc.id);
-      if(ev){G.pendingChoice={id:ev.id,text:ev.text,opts:ev.opts.map((o,i)=>({label:o.label,i}))};G._choiceRef=ev;}
+      if(ev){G.pendingChoice={id:ev.id,text:_choiceText(ev),opts:_choiceOpts(ev)};G._choiceRef=ev;}
     }
     _pcache.clear();
     return true;
@@ -6378,7 +6399,7 @@ function mapDetailHTML(){
         <div class="maps-fac">${(()=>{const f=[];
           if(G.cameraOn&&["laocheng","bazaar","chasa","gaotai"].includes(did))f.push("📷 天网");
           if(G.freezones>0&&did==="kaifaqu")f.push((typeof _dd==="function")?_dd(`🏭 自贸区×${G.freezones}`,`🏭 Free-trade zone ×${G.freezones}`,`🏭 ئەركىن سودا رايونى ×${G.freezones}`):`🏭 自贸区×${G.freezones}`);
-          if(G.centerCapacity>15&&did==="jiaopei")f.push(`🏚 教培×${Math.round((G.centerCapacity-15)/10)}`);
+          if(G.centerCapacity>15&&did==="jiaopei"){ const _n=Math.round((G.centerCapacity-15)/10); f.push(_dd(`🏚 教培×${_n}`,`🏚 Re-ed center ×${_n}`,`🏚 تەربىيەلەش مەركىزى ×${_n}`,`🏚 Centro de reeducação ×${_n}`)); }
           return f.length?f.join("<br>"):`<span class="dim">本区无固定设施</span>`;})()}</div>
       </div>
       <div class="mapcol">
@@ -7797,6 +7818,446 @@ function maybeSpawnEventStory(force){
   }
   if(typeof mapPingXY==="function"){ const geo=_buildGeo(); const c0=geo.cent[d.idx]; mapPingXY(c0.x+(Math.random()*10-5),c0.y+(Math.random()*10-5),"choice",e.name,d.name); }
   return true;
+}
+
+// ══════════════════════════════════════════════════════════
+//  内容扩充 v8 —— 人物线 · 良知与清算 · 抵抗结局 · 后记
+//  ▸ 三条人物线：翻译阿依努尔、辅警小周、女儿小雨（加急电报，按序推进）
+//  ▸ 隐藏的「良知」与「共谋」；可见的「私人笔记」（你记下的，系统不记）
+//  ▸ 清算：抽屉里的信 → 最后的报告 → 三个抵抗结局（吹哨 / 辞呈 / 最后的签字）
+//  ▸ 所有结局附「后记」：人物的去向 + 他们的声音
+// ══════════════════════════════════════════════════════════
+function _L4(o){ if(o==null) return ""; if(typeof o==="function") o=o(); if(typeof o==="string") return o; const L=(typeof LANG==="undefined")?"zh":LANG; return L==="en"?o.e:L==="ug"?o.u:L==="pt"?o.p:o.z; }
+function _chT(t,L){ if(typeof t==="function") t=t(); if(t&&typeof t==="object") return L==="en"?t.e:L==="ug"?t.u:L==="pt"?t.p:t.z; return _TL(L,t); }
+function _arc(){ if(!G.arc||typeof G.arc!=="object") G.arc={}; return G.arc; }
+function _cs(n){ G.conscience=(G.conscience||0)+n; }
+function _cp(n){ G.complicity=(G.complicity||0)+n; }
+function _nb(n){ G.notebook=(G.notebook||0)+n; }
+function _consc(){ return (G.conscience||0)+Math.floor(((G.collection||[]).length)/4); }
+function _since(k){ const a=_arc(); return (a[k]==null)?-1:G.week-a[k]; }
+function _choiceOpts(ev){ return ev.opts.map((o,i)=>({label:o.label,i})).filter(o=>{ const c=ev.opts[o.i].cond; return !c||c(); }); }
+function _choiceText(ev){ return (typeof ev.text==="function")?ev.text():ev.text; }
+
+const CHOICE_EVENTS_V8=[
+// ───────── 人物线一：翻译阿依努尔 ─────────
+{ id:"ch_ay1", cond:()=>G.week>=12 && _arc().ay==null,
+  text:{
+   z:`🗣 审讯录音的复核报告送到你桌上。被审讯的老人说的是：「我每天为我母亲祈祷。」工作组的塔里族翻译阿依努尔译成了：「我每天去看我母亲。」——一词之差，「宗教活动」变成了「探亲」。复核员在这一句下面画了红线。阿依努尔站在门口，没有辩解。`,
+   e:`🗣 The review of an interrogation recording lands on your desk. The old man under questioning said: "Every day I pray for my mother." The work team's Tali interpreter, Aynur, rendered it as: "Every day I visit my mother." One word, and "religious activity" became "family visit." The reviewer has underlined the sentence in red. Aynur stands in the doorway and offers no excuse.`,
+   u:`🗣 سوراق ئۈنىنىڭ قايتا تەكشۈرۈش دوكلاتى ئۈستىلىڭىزگە كەلدى. سوراق قىلىنغان بوۋاي: «مەن ھەر كۈنى ئانام ئۈچۈن دۇئا قىلىمەن» دېگەن. خىزمەت گۇرۇپپىسىنىڭ تالى مىللىتىدىن بولغان تەرجىمانى ئاينۇر ئۇنى: «مەن ھەر كۈنى ئانامنى يوقلايمەن» دەپ تەرجىمە قىلغان. بىرلا سۆزنىڭ پەرقى بىلەن «دىنىي پائالىيەت» «تۇغقان يوقلاش»قا ئايلانغان. تەكشۈرگۈچى بۇ جۈملىنىڭ ئاستىغا قىزىل سىزىق سىزىپتۇ. ئاينۇر ئىشىك ئالدىدا تۇرىدۇ، ھېچ ئاقلىمايدۇ.`,
+   p:`🗣 Chega-te à secretária a revisão da gravação de um interrogatório. O velho interrogado disse: «Todos os dias rezo pela minha mãe.» A intérprete tali da equipa, Aynur, traduziu: «Todos os dias visito a minha mãe.» Uma palavra, e «atividade religiosa» passou a «visita à família». O revisor sublinhou a frase a vermelho. Aynur está à porta e não se justifica.`},
+  opts:[
+   {label:{z:"上报「翻译失实」，按规定处理她（+政绩，+民怨）",e:"Report her for \"mistranslation\" and let the rules take their course (+Merit, +Resentment)",u:"«تەرجىمە خاتا» دەپ مەلۇم قىلىپ، قائىدە بويىچە بىر تەرەپ قىلىش (+سىياسىي نەتىجە، +نارازىلىق)",p:"Denunciá-la por «tradução falsa» e deixar as regras seguir o seu curso (+Mérito, +Ressentimento)"},
+    effect:()=>{ addPerf(2); G.resentment=Math.min(100,G.resentment+3); _cp(1); const a=_arc(); a.ay=-1; a.ayW=G.week;
+     return _nbt(`「翻译失实」四个字进了她的档案。第二天，翻译席上换了一个新人，译得又快又准，老人的笔录被改回了「祈祷」。政绩 +2，民怨 +3。阿依努尔没有再来上班——后来你才知道，她也被「请去学习」了。`,
+      `"Mistranslation" went into her file. The next day a new interpreter sat in her chair, fast and accurate, and the old man's statement was changed back to "pray." Merit +2, Resentment +3. Aynur did not come back to work. Later you learned that she, too, had been "invited to study."`,
+      `«تەرجىمە خاتا» دېگەن سۆز ئۇنىڭ ئارخىپىغا كىردى. ئەتىسى تەرجىمان ئورنىدا يېڭى بىرى ئولتۇردى، تېز ھەم توغرا تەرجىمە قىلدى، بوۋاينىڭ خاتىرىسى قايتىدىن «دۇئا» دەپ ئۆزگەرتىلدى. سىياسىي نەتىجە +2، خەلق نارازىلىقى +3. ئاينۇر قايتا ئىشقا كەلمىدى — كېيىن بىلدىڭىز، ئۇمۇ «ئۆگىنىشكە تەكلىپ قىلىنغان» ئىكەن.`,
+      `«Tradução falsa» entrou no processo dela. No dia seguinte, outra pessoa ocupou a cadeira de intérprete, rápida e exata, e o depoimento do velho voltou a dizer «rezar». Mérito +2, Ressentimento +3. Aynur não voltou ao trabalho. Mais tarde soubeste que também ela fora «convidada a estudar».`); }},
+   {label:{z:"改回原话，私下警告她",e:"Correct the transcript and warn her in private",u:"ئەسلى سۆزگە قايتۇرۇپ، ئۇنى يوشۇرۇن ئاگاھلاندۇرۇش",p:"Corrigir a transcrição e avisá-la em privado"},
+    effect:()=>{ const a=_arc(); a.ay=1; a.ayW=G.week;
+     return _nbt(`你把那一句改回「祈祷」，把她叫进办公室，关上门：「下不为例。」她点点头，眼睛一直看着地面。出门前她轻声说：「他只是想念他母亲。」`,
+      `You changed the line back to "pray," called her into your office and shut the door: "Never again." She nodded, eyes on the floor the whole time. On her way out she said quietly: "He only misses his mother."`,
+      `سىز ئۇ جۈملىنى «دۇئا» غا قايتۇردىڭىز، ئۇنى ئىشخانىغا چاقىرىپ ئىشىكنى ياپتىڭىز: «يەنە بولمىسۇن.» ئۇ بېشىنى لىڭشىتتى، كۆزى يەردىن ئايرىلمىدى. چىقىپ كېتىشتىن بۇرۇن ئاستا: «ئۇ پەقەت ئانىسىنى سېغىنىدۇ» دېدى.`,
+      `Voltaste a pôr «rezar», chamaste-a ao gabinete e fechaste a porta: «Que não se repita.» Ela acenou, sempre de olhos no chão. Ao sair, disse baixinho: «Ele só tem saudades da mãe.»`); }},
+   {label:{z:"在复核单上签「语义无误」，让那句话留着（-政绩）",e:"Sign the review form \"meaning accurate\" and let the sentence stand (-Merit)",u:"تەكشۈرۈش جەدۋىلىگە «مەنىسى توغرا» دەپ ئىمزا قويۇپ، ئۇ جۈملىنى قالدۇرۇش (-سىياسىي نەتىجە)",p:"Assinar a revisão como «sentido correto» e deixar a frase ficar (-Mérito)"},
+    effect:()=>{ G.performance=Math.max(0,G.performance-2); _cs(1); const a=_arc(); a.ay=2; a.ayW=G.week;
+     return _nbt(`你在复核单上签了「语义无误」。复核员看了你一眼，没说话。政绩 -2。那位老人的笔录里，从此只有一个想念母亲的儿子。第二天早上，你桌上多了一块馕，没有留字条。`,
+      `You signed the form: "meaning accurate." The reviewer gave you a look and said nothing. Merit -2. From then on, the old man's statement held only a son who missed his mother. The next morning there was a naan on your desk. No note.`,
+      `سىز تەكشۈرۈش جەدۋىلىگە «مەنىسى توغرا» دەپ ئىمزا قويدىڭىز. تەكشۈرگۈچى سىزگە بىر قاراپ قويۇپ ھېچنېمە دېمىدى. سىياسىي نەتىجە -2. ئۇ بوۋاينىڭ خاتىرىسىدە شۇنىڭدىن كېيىن پەقەت ئانىسىنى سېغىنغان بىر ئوغۇللا قالدى. ئەتىسى ئەتىگەن ئۈستىلىڭىزدە بىر نان تۇراتتى، خەت يوق.`,
+      `Assinaste: «sentido correto». O revisor olhou para ti e não disse nada. Mérito -2. A partir daí, o depoimento do velho guardou apenas um filho com saudades da mãe. Na manhã seguinte havia um naan na tua secretária. Sem bilhete.`); }},
+  ]},
+{ id:"ch_ay2", cond:()=>{ const a=_arc(); return a.ay>=1 && a.ay2==null && _since("ayW")>=10; },
+  text:{
+   z:`📋 下班后，阿依努尔在走廊里等你。她递过来一张纸条，上面写着一个名字和一个出生年份——艾克然，她的弟弟。「两年前被带走的。他们说是去『学习』。我只想知道……他还在不在。」收押名册就在你的系统里，查一下只要十秒钟。`,
+   e:`📋 After work, Aynur is waiting for you in the corridor. She hands you a slip of paper with a name and a year of birth: Ekrem, her younger brother. "They took him two years ago. They said it was to 'study.' I just want to know... whether he's still there." The detention roster is in your system. Looking him up would take ten seconds.`,
+   u:`📋 ئىشتىن چۈشكەندىن كېيىن ئاينۇر كارىدوردا سىزنى ساقلاپ تۇرىدۇ. ئۇ سىزگە بىر پارچە قەغەز سۇنىدۇ، ئۈستىدە بىر ئىسىم ۋە تۇغۇلغان يىلى يېزىلغان — ئەكرەم، ئۇنىڭ ئىنىسى. «ئىككى يىل بۇرۇن ئېلىپ كېتىلگەن. ‹ئۆگىنىشكە› دېيىشتى. مەن پەقەت... ئۇنىڭ بار-يوقلۇقىنى بىلىشنى خالايمەن.» قاماق تىزىملىكى سىستېمىڭىزدە بار، تەكشۈرۈشكە ئون سېكۇنتلا كېتىدۇ.`,
+   p:`📋 Depois do trabalho, Aynur espera-te no corredor. Estende-te um papel com um nome e um ano de nascimento: Ekrem, o irmão mais novo. «Levaram-no há dois anos. Disseram que era para "estudar". Só quero saber... se ele ainda lá está.» O registo de detidos está no teu sistema. Procurá-lo levaria dez segundos.`},
+  opts:[
+   {label:{z:"「规定不允许。」",e:"\"The rules don't allow it.\"",u:"«قائىدە يول قويمايدۇ.»",p:"«As regras não o permitem.»"},
+    effect:()=>{ const a=_arc(); a.ay2=0; a.ay2W=G.week;
+     return _nbt(`你把纸条推了回去。她没有再求，只是把纸条折好，放回口袋：「我明白。」走廊的灯管嗡嗡地响。那之后，她译得一字不差。`,
+      `You pushed the paper back. She did not ask again; she folded it and put it back in her pocket. "I understand." The corridor light hummed. After that, she translated every word exactly.`,
+      `سىز قەغەزنى قايتۇرۇپ ئىتتىردىڭىز. ئۇ قايتا ئۆتۈنمىدى، قەغەزنى قاتلاپ يانچۇقىغا سالدى: «چۈشەندىم.» كارىدوردىكى چىراق غوڭۇلداپ تۇراتتى. شۇنىڭدىن كېيىن ئۇ ھەر بىر سۆزنى بىر ھەرپمۇ خاتالاشتۇرماي تەرجىمە قىلدى.`,
+      `Devolveste o papel. Ela não voltou a pedir; dobrou-o e guardou-o no bolso. «Compreendo.» A lâmpada do corredor zumbia. A partir daí, traduziu cada palavra sem desvio.`); }},
+   {label:{z:"查一下，如实告诉她",e:"Look him up and tell her the truth",u:"تەكشۈرۈپ، ئۇنىڭغا راستىنى ئېيتىش",p:"Procurá-lo e dizer-lhe a verdade"},
+    effect:()=>{ _cs(1); const a=_arc(); a.ay2=1; a.ay2W=G.week;
+     return _nbt(`你查了。艾克然，「已结业，统一安排至外省就业」——地址一栏是空的。你把屏幕转过去给她看。她看了很久，说：「至少……他还活着。」然后她哭了，很安静，没有出一点声音。`,
+      `You looked. Ekrem: "Graduated; centrally assigned to employment in another province." The address field was empty. You turned the screen toward her. She looked for a long time, then said: "At least... he's alive." Then she cried, very quietly, without a sound.`,
+      `سىز تەكشۈردىڭىز. ئەكرەم: «ئوقۇش پۈتتۈرگەن، باشقا ئۆلكىگە بىر تۇتاش ئىشقا ئورۇنلاشتۇرۇلغان» — ئادرېس ئىستونى بوش. سىز ئېكراننى ئۇنىڭغا بۇرىدىڭىز. ئۇ ئۇزۇن قاراپ تۇرۇپ: «ھېچ بولمىغاندا... ئۇ ھايات ئىكەن» دېدى. ئاندىن يىغلىدى، ناھايىتى جىمجىت، ھېچ ئاۋاز چىقارماي.`,
+      `Procuraste. Ekrem: «Concluiu a formação; colocado centralmente num emprego noutra província.» O campo da morada estava vazio. Viraste o ecrã para ela. Olhou muito tempo e disse: «Ao menos... está vivo.» Depois chorou, muito baixinho, sem um som.`); }},
+   {label:{z:"查到后，安排一次视频通话（-经费 -政绩，-民怨）",e:"Find him and arrange a video call (-Budget -Merit, -Resentment)",u:"تېپىپ، بىر قېتىم سىنلىق سۆزلىشىش ئورۇنلاشتۇرۇش (-مەبلەغ -سىياسىي نەتىجە، -نارازىلىق)",p:"Encontrá-lo e marcar uma videochamada (-Orçamento -Mérito, -Ressentimento)"},
+    effect:()=>{ G.budget=Math.max(0,G.budget-6); G.performance=Math.max(0,G.performance-2); G.resentment=Math.max(0,G.resentment-2); _cs(2); const a=_arc(); a.ay2=2; a.ay2W=G.week;
+     return _nbt(`你动用了一个人情，又批了一笔「协调经费」。视频接通时，屏幕那头的艾克然穿着统一的工装，头发剃得很短，身后站着一个人。按规定，他们只能说国语。他说：「我很好，感谢政府。」她说：「我知道。」三分钟后，屏幕黑了。经费 -6，政绩 -2，民怨 -2。`,
+      `You called in a favor and signed off on some "coordination funds." When the call connected, Ekrem wore a standard-issue work uniform, his head shaved close, someone standing behind him. By the rules, they could speak only the national language. He said: "I'm fine. Thank the government." She said: "I know." Three minutes later the screen went black. Budget -6, Merit -2, Resentment -2.`,
+      `سىز بىر تونۇشنىڭ يۈزىنى ئىشلىتىپ، يەنە بىر «ماسلاشتۇرۇش مەبلىغى» تەستىقلىدىڭىز. سىن ئۇلانغاندا، ئېكراننىڭ ئۇ تەرىپىدىكى ئەكرەم بىر خىل خىزمەت كىيىمى كىيگەن، چېچى قىسقا چۈشۈرۈلگەن، كەينىدە بىرى تۇرغان. قائىدە بويىچە ئۇلار پەقەت دۆلەت تىلىدىلا سۆزلىشەلەيتتى. ئۇ: «مەن ياخشى، ھۆكۈمەتكە رەھمەت» دېدى. ئاينۇر: «بىلىمەن» دېدى. ئۈچ مىنۇتتىن كېيىن ئېكران قارىيىپ كەتتى. مەبلەغ -6، سىياسىي نەتىجە -2، خەلق نارازىلىقى -2.`,
+      `Pediste um favor e aprovaste uns «fundos de coordenação». Quando a chamada ligou, Ekrem vestia uma farda de trabalho igual às outras, cabelo rapado, alguém de pé atrás dele. Pelas regras, só podiam falar a língua nacional. Ele disse: «Estou bem. Obrigado ao governo.» Ela disse: «Eu sei.» Três minutos depois, o ecrã ficou negro. Orçamento -6, Mérito -2, Ressentimento -2.`); }},
+  ]},
+{ id:"ch_ay3", cond:()=>{ const a=_arc(); return a.ay>=1 && a.ay2!=null && a.ay3==null && _since("ay2W")>=14; },
+  text:{
+   z:`✉ 阿依努尔递交了辞职信，理由一栏写着「个人原因」。国保科随即来电：「主动辞职的少数民族干部，按规定要列为『不稳定人员』重点关注。请你在审批单上签意见。」她就坐在你对面，等你落笔。`,
+   e:`✉ Aynur has handed in her resignation. Under "reason" she wrote: "Personal." State Security calls at once: "Minority cadres who resign of their own accord are, by regulation, to be listed as 'unstable persons' for priority monitoring. Please write your opinion on the approval form." She is sitting across from you, waiting for your pen.`,
+   u:`✉ ئاينۇر ئىستىپا خېتى تاپشۇردى، سەۋەب ئىستونىغا «شەخسىي سەۋەب» دەپ يازغان. دۆلەت بىخەتەرلىكى بۆلۈمى دەرھال تېلېفون قىلدى: «ئۆز ئىختىيارى بىلەن ئىستىپا بەرگەن ئاز سانلىق مىللەت كادىرلىرى قائىدە بويىچە ‹مۇقىمسىز شەخس› قاتارىدا ئالاھىدە كۆزىتىلىدۇ. تەستىق جەدۋىلىگە پىكرىڭىزنى يېزىڭ.» ئۇ ئۇدۇلىڭىزدا ئولتۇرۇپ، قەلىمىڭىزنى ساقلاۋاتىدۇ.`,
+   p:`✉ Aynur apresentou a demissão. No campo «motivo» escreveu: «Pessoal.» A Segurança do Estado telefona logo: «Quadros de minorias que se demitem por iniciativa própria devem, por regulamento, ser listados como "pessoas instáveis" sob vigilância prioritária. Escreva o seu parecer no formulário.» Ela está sentada à tua frente, à espera da tua caneta.`},
+  opts:[
+   {label:{z:"签「同意列为重点关注」",e:"Sign: \"Agree to priority monitoring\"",u:"«ئالاھىدە كۆزىتىشكە قوشۇلىمەن» دەپ ئىمزا قويۇش",p:"Assinar: «Concordo com a vigilância prioritária»"},
+    effect:()=>{ addPerf(1); _cp(1); const a=_arc(); a.ay3=1; a.ay3W=G.week;
+     return _nbt(`你签了。她拿起包，走到门口又回头看了你一眼，像是要把你的脸记住。三个月后，她的名字出现在一份新的收押名单上。你翻过了那一页。`,
+      `You signed. She picked up her bag, and at the door she turned back and looked at you, as if memorizing your face. Three months later her name appeared on a new detention list. You turned the page.`,
+      `سىز ئىمزا قويدىڭىز. ئۇ سومكىسىنى ئېلىپ ئىشىك ئالدىغا بارغاندا بۇرۇلۇپ سىزگە بىر قارىدى، خۇددى چىرايىڭىزنى يادلىۋالماقچى بولغاندەك. ئۈچ ئايدىن كېيىن ئۇنىڭ ئىسمى يېڭى بىر قاماق تىزىملىكىدە كۆرۈندى. سىز ئۇ بەتنى ئۆرۈۋەتتىڭىز.`,
+      `Assinaste. Ela pegou na mala e, à porta, voltou-se e olhou para ti, como quem decora um rosto. Três meses depois, o nome dela apareceu numa nova lista de detidos. Viraste a página.`); }},
+   {label:{z:"批准辞职，写「个人原因，无异常」（-政绩）",e:"Approve it and write \"Personal reasons, nothing abnormal\" (-Merit)",u:"ئىستىپانى تەستىقلاپ، «شەخسىي سەۋەب، ھېچ نورمالسىزلىق يوق» دەپ يېزىش (-سىياسىي نەتىجە)",p:"Aprovar e escrever «Motivos pessoais, nada de anormal» (-Mérito)"},
+    effect:()=>{ G.performance=Math.max(0,G.performance-1); _cs(1); const a=_arc(); a.ay3=2; a.ay3W=G.week;
+     return _nbt(`你在意见栏写下「个人原因，无异常」，盖了章。国保科打来电话问你确定吗，你说确定。政绩 -1。她走的那天，把翻译席擦得干干净净。`,
+      `In the opinion field you wrote "Personal reasons, nothing abnormal," and stamped it. State Security called to ask if you were sure. You said you were. Merit -1. On the day she left, she wiped the interpreter's desk spotless.`,
+      `سىز پىكىر ئىستونىغا «شەخسىي سەۋەب، ھېچ نورمالسىزلىق يوق» دەپ يېزىپ، تامغا باستىڭىز. دۆلەت بىخەتەرلىكى بۆلۈمى تېلېفون قىلىپ جەزىملەشتۈرمەكچى بولدى، سىز «جەزىم» دېدىڭىز. سىياسىي نەتىجە -1. ئۇ كەتكەن كۈنى تەرجىمان ئۈستىلىنى پاكپاكىز سۈرتۈپ قويدى.`,
+      `No parecer escreveste «Motivos pessoais, nada de anormal» e carimbaste. A Segurança do Estado ligou a perguntar se tinhas a certeza. Disseste que sim. Mérito -1. No dia em que partiu, ela deixou a mesa de intérprete a brilhar.`); }},
+   {label:{z:"批准，并请她留下一样东西（-政绩，+笔记）",e:"Approve it, and ask her to leave something behind (-Merit, +Notebook)",u:"تەستىقلاپ، ئۇنىڭدىن بىر نەرسە قالدۇرۇشنى سوراش (-سىياسىي نەتىجە، +خاتىرە)",p:"Aprovar e pedir-lhe que deixe algo para trás (-Mérito, +Caderno)"},
+    effect:()=>{ G.performance=Math.max(0,G.performance-1); _cs(1); _nb(3); const a=_arc(); a.ay3=3; a.ay3W=G.week;
+     return _nbt(`你批了，然后问她：「这些年你译过的话里，有哪些是没被记下来的？」她沉默了很久，从包里拿出一个旧笔记本推给你：「每一句我改过的，和他们真正说过的。」你把它锁进了抽屉最底层。私人笔记 +3 页。政绩 -1。`,
+      `You approved it, then asked her: "Of everything you translated all these years, what never made it into the record?" She was silent a long while, then took an old notebook from her bag and slid it across: "Every sentence I changed, and what they really said." You locked it in the bottom drawer. Private notebook +3 pages. Merit -1.`,
+      `سىز تەستىقلىدىڭىز، ئاندىن ئۇنىڭدىن سورىدىڭىز: «بۇ يىللاردا تەرجىمە قىلغان سۆزلىرىڭنىڭ قايسىلىرى خاتىرىگە كىرمىدى؟» ئۇ ئۇزۇن سۈكۈت قىلىپ، سومكىسىدىن بىر كونا خاتىرە دەپتىرىنى چىقىرىپ سىزگە ئىتتىردى: «مەن ئۆزگەرتكەن ھەر بىر جۈملە، ۋە ئۇلارنىڭ ئەسلىدە نېمە دېگىنى.» سىز ئۇنى تارتمىنىڭ ئەڭ ئاستىغا قۇلۇپلاپ قويدىڭىز. شەخسىي خاتىرە +3 بەت. سىياسىي نەتىجە -1.`,
+      `Aprovaste e perguntaste-lhe: «De tudo o que traduziste estes anos, o que é que nunca ficou registado?» Ela ficou calada muito tempo; depois tirou da mala um caderno velho e empurrou-o para ti: «Cada frase que mudei, e o que eles disseram de verdade.» Fechaste-o à chave na última gaveta. Caderno privado +3 páginas. Mérito -1.`); }},
+  ]},
+// ───────── 人物线二：辅警小周 ─────────
+{ id:"ch_zh1", cond:()=>G.week>=18 && _arc().zh==null,
+  text:{
+   z:`🚓 凌晨巡查时，你在教培中心门岗发现了辅警小周。二十二岁，从内地应聘来的，招聘广告上写着「月薪过万，守护边疆」。他蹲在岗亭里哭，制服袖口上沾着别人的血。「指挥长，我能不能调走？我每天晚上都听见他们喊……我受不了了。」`,
+   e:`🚓 On a pre-dawn inspection you find auxiliary officer Xiao Zhou at the re-education center gate. Twenty-two, recruited from the interior; the job ad promised "five-figure pay, guarding the frontier." He is crouched in the sentry box crying, someone else's blood on his cuff. "Commander, can I be transferred? Every night I hear them screaming... I can't take it anymore."`,
+   u:`🚓 تاڭ سەھەردىكى تەكشۈرۈشتە سىز تەربىيەلەش مەركىزىنىڭ دەرۋازىسىدا ياردەمچى ساقچى شياۋ جۇنى ئۇچرىتىپ قالدىڭىز. يىگىرمە ئىككى ياش، ئىچكى ئۆلكىدىن ئىشقا قوبۇل قىلىنغان؛ ئېلاندا «ئايلىق مائاش ئون مىڭدىن ئارتۇق، چېگرىنى قوغداش» دېيىلگەن. ئۇ قاراۋۇلخانىدا مۈكچىيىپ يىغلاۋاتىدۇ، يەڭ ئۇچىدا باشقىلارنىڭ قېنى بار. «قوماندان، مېنى يۆتكەپ قويالامسىز؟ ھەر كېچىسى ئۇلارنىڭ ۋارقىرىشىنى ئاڭلايمەن... چىدىيالمىدىم.»`,
+   p:`🚓 Numa ronda de madrugada encontras o agente auxiliar Xiao Zhou no portão do centro de reeducação. Vinte e dois anos, recrutado no interior; o anúncio prometia «salário de cinco dígitos, guardar a fronteira». Está agachado na guarita a chorar, com sangue de outra pessoa no punho. «Comandante, posso ser transferido? Todas as noites ouço-os gritar... Já não aguento.»`},
+  opts:[
+   {label:{z:"批评他「思想动摇」，让他回岗",e:"Rebuke his \"ideological wavering\" and send him back to his post",u:"ئۇنى «ئىدىيىسى تەۋرەنگەن» دەپ تەنقىدلەپ، ئورنىغا قايتۇرۇش",p:"Repreendê-lo por «vacilação ideológica» e mandá-lo de volta ao posto"},
+    effect:()=>{ _cp(1); const a=_arc(); a.zh=1; a.zhW=G.week;
+     return _nbt(`你让他站起来，把帽子戴正：「这是任务。」他抹了把脸，回到岗位上。从那以后他再也没哭过——同事说，他变得「很得力」，下手也越来越重。`,
+      `You told him to stand up and straighten his cap: "This is the mission." He wiped his face and went back to his post. He never cried again. His colleagues say he has become "very capable," and heavier-handed by the day.`,
+      `سىز ئۇنى ئورنىدىن تۇرغۇزۇپ، شەپكىسىنى توغرىلاتتىڭىز: «بۇ ۋەزىپە.» ئۇ يۈزىنى سۈرتۈپ ئورنىغا قايتتى. شۇنىڭدىن كېيىن ئۇ قايتا يىغلىمىدى — خىزمەتداشلىرى ئۇنى «ناھايىتى قابىلىيەتلىك» بولۇپ قالدى، قولى بارغانسېرى ئېغىرلاشتى دېيىشىدۇ.`,
+      `Mandaste-o levantar-se e endireitar o boné: «Isto é a missão.» Ele limpou a cara e voltou ao posto. Nunca mais chorou. Os colegas dizem que ficou «muito competente», e cada dia com a mão mais pesada.`); }},
+   {label:{z:"调他去交警队（-政绩）",e:"Transfer him to traffic police (-Merit)",u:"ئۇنى قاتناش ساقچى ئەترىتىگە يۆتكەش (-سىياسىي نەتىجە)",p:"Transferi-lo para a polícia de trânsito (-Mérito)"},
+    effect:()=>{ G.performance=Math.max(0,G.performance-1); _cs(1); const a=_arc(); a.zh=2; a.zhW=G.week;
+     return _nbt(`你在调令上签了字。「人手本来就不够」，上级批评了一句，政绩 -1。小周走的时候给你敬了个礼，手还在抖。`,
+      `You signed the transfer. "We're short-handed as it is," your superiors grumbled: Merit -1. Xiao Zhou saluted you as he left. His hand was still shaking.`,
+      `سىز يۆتكەش بۇيرۇقىغا ئىمزا قويدىڭىز. «ئادەم ئاللىبۇرۇن يېتىشمەيدۇ» دەپ يۇقىرى بىر ئېغىز تەنقىد قىلدى، سىياسىي نەتىجە -1. شياۋ جۇ كېتىۋېتىپ سىزگە چەس بەردى، قولى يەنىلا تىترەيتتى.`,
+      `Assinaste a transferência. «Já estamos com falta de pessoal», resmungaram os superiores: Mérito -1. Xiao Zhou fez-te continência ao sair. A mão ainda lhe tremia.`); }},
+   {label:{z:"让他留下，但把看到的都记下来",e:"Keep him on, but tell him to write down everything he sees",u:"ئۇنى قالدۇرۇپ، كۆرگەنلىرىنىڭ ھەممىسىنى خاتىرىلەشنى ئېيتىش",p:"Mantê-lo, mas dizer-lhe para anotar tudo o que vê"},
+    effect:()=>{ _cs(1); const a=_arc(); a.zh=3; a.zhW=G.week;
+     return _nbt(`你压低声音：「调不了。但你看到的、听到的，每一件都记下来——日期、人名、发生了什么。总有一天用得上。」他愣了很久，然后点了点头。`,
+      `You lowered your voice: "I can't transfer you. But everything you see and hear, write it down: dates, names, what happened. One day it will matter." He stared at you a long time, then nodded.`,
+      `سىز ئاۋازىڭىزنى پەسەيتتىڭىز: «يۆتكىيەلمەيمەن. لېكىن كۆرگەن، ئاڭلىغانلىرىڭنىڭ ھەممىسىنى خاتىرىلە — چېسلا، ئىسىم، نېمە ئىش بولغانلىقى. بىر كۈنى كېرەك بولىدۇ.» ئۇ ئۇزۇن تۇرۇپ قالدى، ئاندىن بېشىنى لىڭشىتتى.`,
+      `Baixaste a voz: «Não te posso transferir. Mas tudo o que vires e ouvires, escreve: datas, nomes, o que aconteceu. Um dia vai ser preciso.» Ele ficou muito tempo a olhar para ti e depois acenou.`); }},
+  ]},
+{ id:"ch_zh2", cond:()=>{ const a=_arc(); return a.zh>=1 && a.zh2==null && _since("zhW")>=12; },
+  text:{
+   z:`📱 例行手机检查时，督查组在小周的手机里发现了一段四十秒的视频：教培中心宿舍，二十个人挤在一间屋子里，墙上贴着「感恩」两个大字。督查组长把手机放在你桌上：「泄密，性质严重。是你的人，你来处理。」`,
+   e:`📱 In a routine phone check, the inspection team finds a forty-second video on Xiao Zhou's phone: a re-education center dormitory, twenty people crammed into one room, the word "GRATITUDE" in big characters on the wall. The team leader puts the phone on your desk: "A leak. A serious one. He's your man; you deal with it."`,
+   u:`📱 ئادەتتىكى تېلېفون تەكشۈرۈشتە تەكشۈرۈش گۇرۇپپىسى شياۋ جۇنىڭ تېلېفونىدىن قىرىق سېكۇنتلۇق بىر سىن تاپتى: تەربىيەلەش مەركىزىنىڭ ياتىقى، بىر ئۆيگە يىگىرمە كىشى تىقىلغان، تامدا «مىننەتدارلىق» دېگەن چوڭ خەت. گۇرۇپپا باشلىقى تېلېفوننى ئۈستىلىڭىزگە قويدى: «مەخپىيەتلىكنى ئاشكارىلاش، خاراكتېرى ئېغىر. سىزنىڭ ئادىمىڭىز، ئۆزىڭىز بىر تەرەپ قىلىڭ.»`,
+   p:`📱 Numa verificação de rotina, a equipa de inspeção encontra no telemóvel de Xiao Zhou um vídeo de quarenta segundos: um dormitório do centro de reeducação, vinte pessoas apertadas num só quarto, a palavra «GRATIDÃO» em letras grandes na parede. O chefe da equipa pousa o telemóvel na tua secretária: «Fuga de informação. Grave. É homem seu; resolva.»`},
+  opts:[
+   {label:{z:"移交国安（+政绩）",e:"Hand him over to State Security (+Merit)",u:"دۆلەت بىخەتەرلىكىگە تاپشۇرۇش (+سىياسىي نەتىجە)",p:"Entregá-lo à Segurança do Estado (+Mérito)"},
+    effect:()=>{ addPerf(3); _cp(2); const a=_arc(); a.zh2=1; a.zh2W=G.week;
+     return _nbt(`小周被带走的时候没有挣扎。三个月后，他以「泄露国家秘密罪」被判了七年。那段视频被删除了，宿舍里的二十个人还在原地。政绩 +3。`,
+      `Xiao Zhou did not resist when they took him. Three months later he was sentenced to seven years for "leaking state secrets." The video was deleted. The twenty people in the dormitory are still where they were. Merit +3.`,
+      `شياۋ جۇ ئېلىپ كېتىلگەندە قارشىلىق كۆرسەتمىدى. ئۈچ ئايدىن كېيىن ئۇ «دۆلەت مەخپىيىتىنى ئاشكارىلاش جىنايىتى» بىلەن يەتتە يىللىق كېسىلدى. ئۇ سىن ئۆچۈرۈۋېتىلدى، ياتاقتىكى يىگىرمە كىشى يەنىلا شۇ يەردە. سىياسىي نەتىجە +3.`,
+      `Xiao Zhou não resistiu quando o levaram. Três meses depois foi condenado a sete anos por «divulgação de segredos de Estado». O vídeo foi apagado. As vinte pessoas do dormitório continuam onde estavam. Mérito +3.`); }},
+   {label:{z:"让他删掉，压下此事（-政绩）",e:"Have him delete it and bury the matter (-Merit)",u:"ئۆچۈرگۈزۈپ، بۇ ئىشنى بېسىقتۇرۇش (-سىياسىي نەتىجە)",p:"Mandá-lo apagar o vídeo e abafar o caso (-Mérito)"},
+    effect:()=>{ G.performance=Math.max(0,G.performance-2); _cs(1); const a=_arc(); a.zh2=2; a.zh2W=G.week;
+     return _nbt(`你当着督查组长的面删掉了视频：「是我批准拍的取证材料，已销毁。」组长盯着你看了几秒，在本子上记了一笔。政绩 -2。那天晚上，小周发来一条短信：「谢谢。」`,
+      `You deleted the video in front of the team leader: "Evidence footage I authorized. Now destroyed." He stared at you for a few seconds and made a note in his book. Merit -2. That night Xiao Zhou texted you: "Thank you."`,
+      `سىز تەكشۈرۈش گۇرۇپپا باشلىقىنىڭ كۆز ئالدىدا سىننى ئۆچۈردىڭىز: «مەن تەستىقلاپ تارتقۇزغان ئىسپات ماتېرىيالى، يوقىتىلدى.» باشلىق سىزگە بىرنەچچە سېكۇنت تىكىلىپ قاراپ، دەپتىرىگە بىر نېمە يېزىپ قويدى. سىياسىي نەتىجە -2. شۇ كۈنى كەچتە شياۋ جۇ بىر ئۇچۇر ئەۋەتتى: «رەھمەت.»`,
+      `Apagaste o vídeo diante do chefe da equipa: «Material de prova que eu autorizei. Já destruído.» Ele fitou-te uns segundos e escreveu algo no caderno. Mérito -2. Nessa noite, Xiao Zhou mandou-te uma mensagem: «Obrigado.»`); }},
+   {label:{z:"删给督查看，备份留给自己（-政绩，+笔记）",e:"Delete it for the inspectors — and keep a copy (-Merit, +Notebook)",u:"تەكشۈرگۈچىلەرگە كۆرسىتىپ ئۆچۈرۈش، زاپىسىنى ئۆزىڭىزدە قالدۇرۇش (-سىياسىي نەتىجە، +خاتىرە)",p:"Apagá-lo para os inspetores — e guardar uma cópia (-Mérito, +Caderno)"},
+    effect:()=>{ G.performance=Math.max(0,G.performance-2); _cs(1); _nb(2); const a=_arc(); a.zh2=3; a.zh2W=G.week;
+     return _nbt(`你把手机接上自己的电脑，然后当着组长的面删掉了视频。备份文件改了个名字，叫「季度报表_终版」。政绩 -2。私人笔记 +2 页。`,
+      `You plugged the phone into your own computer, then deleted the video in front of the team leader. You renamed the backup "Quarterly_Report_FINAL." Merit -2. Private notebook +2 pages.`,
+      `سىز تېلېفوننى ئۆز كومپيۇتېرىڭىزغا ئۇلىدىڭىز، ئاندىن گۇرۇپپا باشلىقىنىڭ ئالدىدا سىننى ئۆچۈردىڭىز. زاپاس ھۆججەتنىڭ ئىسمىنى «پەسىللىك دوكلات_ئاخىرقى» دەپ ئۆزگەرتتىڭىز. سىياسىي نەتىجە -2. شەخسىي خاتىرە +2 بەت.`,
+      `Ligaste o telemóvel ao teu computador e depois apagaste o vídeo à frente do chefe da equipa. Mudaste o nome da cópia para «Relatório_Trimestral_FINAL». Mérito -2. Caderno privado +2 páginas.`); }},
+  ]},
+{ id:"ch_zh3", cond:()=>{ const a=_arc(); return a.zh2>=2 && a.zh3==null && _since("zh2W")>=12; },
+  text:{
+   z:`✉ 小周托你帮他寄一封信，寄回老家给他母亲。信封没有封口。按规定，所有外寄信件都要「过目」。信里写着：「妈，我在这边很好，工资按时发。只是我有时候想问您：如果一件事所有人都说是对的，可是我每天晚上都睡不着，那它还是对的吗？」`,
+   e:`✉ Xiao Zhou asks you to post a letter for him, home to his mother. The envelope is unsealed. By regulation, all outgoing mail must be "looked over." The letter reads: "Mom, I'm fine here, and they pay me on time. It's just that sometimes I want to ask you: if everyone says something is right, but I can't sleep at night, is it still right?"`,
+   u:`✉ شياۋ جۇ سىزدىن يۇرتىغا، ئانىسىغا بىر خەت ئەۋەتىپ بېرىشنى ئۆتۈندى. كونۋېرت يېپىلمىغان. قائىدە بويىچە سىرتقا ئەۋەتىلىدىغان بارلىق خەتلەر «كۆزدىن كەچۈرۈلۈشى» كېرەك. خەتتە مۇنداق يېزىلغان: «ئاپا، مەن بۇ يەردە ياخشى، مائاش ۋاقتىدا بېرىلىدۇ. پەقەت بەزىدە سىزدىن سورىغۇم كېلىدۇ: ئەگەر بىر ئىشنى ھەممە ئادەم توغرا دېسە، لېكىن مەن ھەر كېچىسى ئۇخلىيالمىسام، ئۇ يەنىلا توغرىمۇ؟»`,
+   p:`✉ Xiao Zhou pede-te que mandes uma carta por ele, para a mãe, na terra natal. O envelope não está fechado. Por regulamento, toda a correspondência para fora tem de ser «vista». A carta diz: «Mãe, estou bem aqui, pagam-me a horas. Só que às vezes queria perguntar-te: se toda a gente diz que uma coisa está certa, mas eu não consigo dormir à noite, ela continua a estar certa?»`},
+  opts:[
+   {label:{z:"按规定扣下这封信",e:"Hold the letter, as regulations require",u:"قائىدە بويىچە بۇ خەتنى توختىتىپ قويۇش",p:"Reter a carta, como manda o regulamento"},
+    effect:()=>{ _cp(1); const a=_arc(); a.zh3=1; a.zh3W=G.week;
+     return _nbt(`你把信放进了「待审」的文件袋。小周的母亲没有收到信，也就没有回答他的问题。后来，他也不再问了。`,
+      `You put the letter in the "pending review" folder. Xiao Zhou's mother never received it, and so never answered his question. After a while, he stopped asking.`,
+      `سىز خەتنى «تەكشۈرۈش كۈتۈۋاتىدۇ» دېگەن ھۆججەت خالتىسىغا سالدىڭىز. شياۋ جۇنىڭ ئانىسى خەتنى تاپشۇرۇۋالمىدى، شۇڭا ئۇنىڭ سوئالىغا جاۋاب بەرمىدى. كېيىن ئۇمۇ سورىمايدىغان بولدى.`,
+      `Puseste a carta na pasta «a aguardar revisão». A mãe de Xiao Zhou nunca a recebeu, e por isso nunca respondeu à pergunta. Com o tempo, ele deixou de perguntar.`); }},
+   {label:{z:"原样寄出",e:"Send it as it is",u:"ئەينەن ئەۋەتىش",p:"Enviá-la tal como está"},
+    effect:()=>{ _cs(1); const a=_arc(); a.zh3=2; a.zh3W=G.week;
+     return _nbt(`你把信封好，盖上邮戳寄了出去。两周后，小周的母亲寄来一大包老家的腊肉，附了一句话：「回家吧。」`,
+      `You sealed the envelope and sent it off. Two weeks later his mother sent a big parcel of cured meat from home, with one line: "Come home."`,
+      `سىز كونۋېرتنى يېپىپ، پوچتا تامغىسى بېسىپ ئەۋەتتىڭىز. ئىككى ھەپتىدىن كېيىن شياۋ جۇنىڭ ئانىسى يۇرتىدىن بىر چوڭ بوغچا قاق گۆش ئەۋەتىپتۇ، يېنىدا بىرلا جۈملە: «ئۆيگە قايت.»`,
+      `Fechaste o envelope e mandaste-o. Duas semanas depois, a mãe enviou um grande embrulho de carne curada da terra, com uma linha: «Volta para casa.»`); }},
+   {label:{z:"批他辞职，送他回家（行动力上限 -1）",e:"Approve his resignation and send him home (max Action -1)",u:"ئىستىپاسىنى تەستىقلاپ، ئۆيىگە قايتۇرۇش (ھەرىكەت چېكى -1)",p:"Aprovar a demissão e mandá-lo para casa (Ação máxima -1)"},
+    effect:()=>{ G.maxAp=Math.max(4,G.maxAp-1); G.ap=Math.min(G.ap,G.maxAp); _cs(1); const a=_arc(); a.zh3=3; a.zh3W=G.week;
+     return _nbt(`你把那封信还给他，又递给他一张辞职审批单：「回家，当面问她。」你少了一个人手（行动力上限 -1）。站台上，他第一次笑了。`,
+      `You handed the letter back to him, along with a resignation form: "Go home. Ask her in person." You are one pair of hands short (max Action -1). On the platform, for the first time, he smiled.`,
+      `سىز خەتنى ئۇنىڭغا قايتۇرۇپ، يەنە بىر ئىستىپا تەستىق جەدۋىلىنى سۇندىڭىز: «ئۆيگە قايت، ئۇنىڭدىن يۈزمۇيۈز سورا.» بىر ئادىمىڭىز كېمەيدى (ھەرىكەت چېكى -1). ۋوكزال سۇپىسىدا ئۇ تۇنجى قېتىم كۈلدى.`,
+      `Devolveste-lhe a carta, juntamente com um formulário de demissão: «Vai para casa. Pergunta-lhe pessoalmente.» Ficas com menos um par de mãos (Ação máxima -1). Na plataforma, pela primeira vez, ele sorriu.`); }},
+  ]},
+];
+
+// ───────── 人物线三：女儿小雨 ─────────
+CHOICE_EVENTS_V8.push(
+{ id:"ch_dt1", cond:()=>G.week>=28 && _arc().dt==null,
+  text:{
+   z:`☎ 深夜，女儿小雨从首都打来电话。她在大学读社会学。「爸，我同学给我看了一篇境外报道，说卡拉城有成千上万的人被关在『学校』里，孩子被迫和父母分开……那都是假的，对吧？你在那里，你最清楚。」`,
+   e:`☎ Late at night your daughter Xiaoyu calls from the capital. She studies sociology at university. "Dad, a classmate showed me a foreign report. It says thousands and thousands of people in Kala City are locked up in 'schools,' that children are taken from their parents... That's all fake, right? You're there. You'd know."`,
+   u:`☎ يېرىم كېچىدە قىزىڭىز شياۋيۈ پايتەختتىن تېلېفون قىلدى. ئۇ ئۇنىۋېرسىتېتتا ئىجتىمائىيەتشۇناسلىق ئوقۇيدۇ. «دادا، ساۋاقدىشىم ماڭا چەت ئەلنىڭ بىر خەۋىرىنى كۆرسەتتى، كالا شەھىرىدە نەچچە مىڭلىغان ئادەم ‹مەكتەپ›كە سولانغان، بالىلار ئاتا-ئانىسىدىن مەجبۇرىي ئايرىۋېتىلگەن دەپتۇ... بۇلارنىڭ ھەممىسى يالغان، شۇنداقمۇ؟ سىز ئۇ يەردە، سىز ئەڭ ياخشى بىلىسىز.»`,
+   p:`☎ Tarde da noite, a tua filha Xiaoyu liga da capital. Estuda sociologia na universidade. «Pai, uma colega mostrou-me uma reportagem estrangeira. Diz que milhares e milhares de pessoas na Cidade de Kala estão fechadas em "escolas", que as crianças são separadas dos pais... É tudo mentira, não é? Tu estás aí. Tu sabes.»`},
+  opts:[
+   {label:{z:"「都是造谣。别看境外媒体。」",e:"\"It's all rumors. Don't read foreign media.\"",u:"«ھەممىسى ئۆسەك. چەت ئەل تاراتقۇلىرىنى كۆرمە.»",p:"«É tudo boato. Não leias a imprensa estrangeira.»"},
+    effect:()=>{ _cp(1); const a=_arc(); a.dt=1; a.dtW=G.week;
+     return _nbt(`「都是造谣。好好读书，别看那些东西。」她沉默了一下：「嗯，我就知道。」挂断之后，你在黑暗里坐了很久。她相信你。这比她不信更难受。`,
+      `"It's all rumors. Study hard and don't read that stuff." She was quiet a moment. "Okay. I knew it." After you hung up, you sat in the dark for a long time. She believed you. That was worse than if she hadn't.`,
+      `«ھەممىسى ئۆسەك. ياخشى ئوقۇ، ئۇنداق نەرسىلەرنى كۆرمە.» ئۇ بىر دەم جىم بولۇپ: «ھە، بىلگەنىدىم» دېدى. تېلېفوننى قويغاندىن كېيىن سىز قاراڭغۇدا ئۇزۇن ئولتۇردىڭىز. ئۇ سىزگە ئىشەندى. بۇ ئۇنىڭ ئىشەنمىگىنىدىنمۇ ئېغىر.`,
+      `«É tudo boato. Estuda e não leias essas coisas.» Ela ficou calada um momento. «Pois. Eu sabia.» Depois de desligares, ficaste muito tempo sentado no escuro. Ela acreditou em ti. Foi pior do que se não tivesse acreditado.`); }},
+   {label:{z:"「很复杂，电话里说不清。」",e:"\"It's complicated. I can't explain on the phone.\"",u:"«بۇ مۇرەككەپ، تېلېفوندا ئېنىق دېگىلى بولمايدۇ.»",p:"«É complicado. Não dá para explicar ao telefone.»"},
+    effect:()=>{ const a=_arc(); a.dt=2; a.dtW=G.week;
+     return _nbt(`「很复杂……电话里说不清楚。」她听出了你的犹豫：「爸，你从来不会说『复杂』。」她没有再追问，但那之后，她打电话的次数少了。`,
+      `"It's complicated... I can't explain on the phone." She heard the hesitation. "Dad, you never say 'complicated.'" She didn't press, but after that she called less often.`,
+      `«بۇ مۇرەككەپ... تېلېفوندا ئېنىق دېگىلى بولمايدۇ.» ئۇ سىزنىڭ ئىككىلىنىشىڭىزنى سەزدى: «دادا، سىز ھېچقاچان ‹مۇرەككەپ› دېمەيتتىڭىز.» ئۇ قايتا سورىمىدى، لېكىن شۇنىڭدىن كېيىن تېلېفون قىلىشى ئازلاپ كەتتى.`,
+      `«É complicado... Não dá para explicar ao telefone.» Ela ouviu a hesitação. «Pai, tu nunca dizes "complicado".» Não insistiu, mas a partir daí passou a ligar menos.`); }},
+   {label:{z:"「有一些……是真的。」",e:"\"Some of it... is true.\"",u:"«بەزىلىرى... راست.»",p:"«Uma parte... é verdade.»"},
+    effect:()=>{ _cs(1); const a=_arc(); a.dt=3; a.dtW=G.week;
+     return _nbt(`你说：「有一些……是真的。」电话那头很久没有声音。然后她说：「那你为什么还在那里？」你没有回答。她也没有挂。你们就这样隔着三千公里，听着彼此呼吸。`,
+      `You said: "Some of it... is true." For a long time there was no sound on the line. Then she said: "Then why are you still there?" You didn't answer. She didn't hang up. Three thousand kilometers apart, you listened to each other breathe.`,
+      `سىز: «بەزىلىرى... راست» دېدىڭىز. تېلېفوننىڭ ئۇ تەرىپىدە ئۇزۇن ئاۋاز چىقمىدى. ئاندىن ئۇ: «ئۇنداقتا سىز نېمىشقا يەنىلا ئۇ يەردە؟» دېدى. سىز جاۋاب بەرمىدىڭىز. ئۇمۇ تېلېفوننى قويمىدى. سىلەر ئۈچ مىڭ كىلومېتىر يىراقلىقتا بىر-بىرىڭلارنىڭ نەپەسلىرىنى ئاڭلاپ تۇردۇڭلار.`,
+      `Disseste: «Uma parte... é verdade.» Durante muito tempo não se ouviu nada do outro lado. Depois ela disse: «Então porque é que ainda aí estás?» Não respondeste. Ela também não desligou. A três mil quilómetros de distância, ficaram a ouvir a respiração um do outro.`); }},
+  ]},
+{ id:"ch_dt2", cond:()=>{ const a=_arc(); return a.dt>=1 && a.dt2==null && _since("dtW")>=20; },
+  text:{
+   z:`🧳 小雨的毕业论文题目定了：《边疆城市的基层社区治理》。她要来卡拉城做两周田野调查。「爸，我想亲眼看看。」宣传部有一条成熟的「参观路线」：模范社区、双语幼儿园、歌舞表演，全程有人陪同。`,
+   e:`🧳 Xiaoyu has settled on her thesis topic: "Grassroots Community Governance in a Frontier City." She wants to come to Kala City for two weeks of fieldwork. "Dad, I want to see it with my own eyes." The propaganda department has a well-worn "visitor route": a model neighborhood, a bilingual kindergarten, a song-and-dance show, escorted the whole way.`,
+   u:`🧳 شياۋيۈنىڭ پۈتتۈرۈش ماقالىسىنىڭ تېمىسى بېكىتىلدى: «چېگرا شەھەرلىرىدىكى ئاساسىي قاتلام مەھەللە باشقۇرۇشى». ئۇ كالا شەھىرىگە كېلىپ ئىككى ھەپتە ئەمەلىي تەكشۈرۈش قىلماقچى. «دادا، ئۆز كۆزۈم بىلەن كۆرگۈم بار.» تەشۋىقات بۆلۈمىنىڭ پىشىپ يېتىلگەن بىر «زىيارەت يولى» بار: ئۈلگىلىك مەھەللە، قوش تىللىق يەسلى، ناخشا-ئۇسسۇل كۆرسىتىشى، پۈتۈن جەرياندا ھەمراھ بار.`,
+   p:`🧳 Xiaoyu já escolheu o tema da tese: «Governação comunitária de base numa cidade de fronteira». Quer vir à Cidade de Kala para duas semanas de trabalho de campo. «Pai, quero ver com os meus próprios olhos.» O departamento de propaganda tem um «roteiro de visita» bem oleado: um bairro-modelo, um jardim de infância bilingue, um espetáculo de canto e dança, sempre acompanhada.`},
+  opts:[
+   {label:{z:"安排她走参观路线（+政绩）",e:"Put her on the visitor route (+Merit)",u:"ئۇنى زىيارەت يولىغا ئورۇنلاشتۇرۇش (+سىياسىي نەتىجە)",p:"Pô-la no roteiro de visita (+Mérito)"},
+    effect:()=>{ addPerf(1); const a=_arc(); a.dt2=1; a.dt2W=G.week;
+     return _nbt(`她走完了全部路线，拍了很多照片：笑着的孩子、整洁的街道、跳舞的老人。论文得了优秀。她在致谢里写：「感谢我的父亲，让我看到了一个和谐的边疆。」政绩 +1。`,
+      `She completed the whole route and took lots of photos: smiling children, tidy streets, old people dancing. Her thesis got top marks. In the acknowledgements she wrote: "Thanks to my father, who showed me a harmonious frontier." Merit +1.`,
+      `ئۇ پۈتۈن يولنى بېسىپ، نۇرغۇن سۈرەت تارتتى: كۈلۈۋاتقان بالىلار، پاكىز كوچىلار، ئۇسسۇل ئويناۋاتقان قېرىلار. ماقالىسى ئەلا باھا ئالدى. ئۇ رەھمەت سۆزىدە: «ماڭا ئىناق بىر چېگرىنى كۆرسەتكەن دادامغا رەھمەت» دەپ يازدى. سىياسىي نەتىجە +1.`,
+      `Ela fez o roteiro todo e tirou muitas fotografias: crianças sorridentes, ruas limpas, velhos a dançar. A tese teve nota máxima. Nos agradecimentos escreveu: «Ao meu pai, que me mostrou uma fronteira harmoniosa.» Mérito +1.`); }},
+   {label:{z:"以「安全原因」不让她来",e:"Keep her away \"for security reasons\"",u:"«بىخەتەرلىك سەۋەبى» بىلەن ئۇنى كەلتۈرمەسلىك",p:"Impedi-la de vir «por razões de segurança»"},
+    effect:()=>{ const a=_arc(); a.dt2=2; a.dt2W=G.week;
+     return _nbt(`「最近不太平，别来了。」她没有坚持，论文换了题目。那年春节她没有回家，说是要实习。`,
+      `"Things aren't calm lately. Don't come." She didn't insist, and changed her topic. That New Year she didn't come home; she said she had an internship.`,
+      `«يېقىندا ئەھۋال تىنچ ئەمەس، كەلمە.» ئۇ چىڭ تۇرۇۋالمىدى، ماقالىسىنىڭ تېمىسىنى ئۆزگەرتتى. شۇ يىلى باھار بايرىمىدا ئۇ ئۆيگە قايتمىدى، ئەمەلىيەتتە ئىشلەيمەن دېدى.`,
+      `«As coisas não andam calmas. Não venhas.» Ela não insistiu e mudou de tema. Nesse Ano Novo não veio a casa; disse que tinha um estágio.`); }},
+   {label:{z:"让她自己去老城走走，不派人陪（-民怨）",e:"Let her walk the old city alone, no escort (-Resentment)",u:"ئۇنى ھەمراھسىز ئۆزى كونا شەھەردە ئايلاندۇرۇش (-نارازىلىق)",p:"Deixá-la andar sozinha pela cidade velha, sem escolta (-Ressentimento)"},
+    effect:()=>{ G.resentment=Math.max(0,G.resentment-1); _cs(1); const a=_arc(); a.dt2=3; a.dt2W=G.week;
+     return _nbt(`你没有告诉宣传部。她一个人在老城走了三天。第三天晚上她回到你的宿舍，问你：「为什么巴扎上的老人一看见我就低头？为什么那么多门上贴着二维码？为什么一整条街都没有孩子？」你给她倒了一杯茶。茶凉了，你们都没有喝。民怨 -1。`,
+      `You didn't tell the propaganda department. She walked the old city alone for three days. On the third night she came back to your quarters and asked: "Why do the old people at the bazaar look down when they see me? Why are there QR codes on so many doors? Why is there a whole street without children?" You poured her a cup of tea. It went cold. Neither of you drank. Resentment -1.`,
+      `سىز تەشۋىقات بۆلۈمىگە ئېيتمىدىڭىز. ئۇ ئۈچ كۈن يالغۇز كونا شەھەردە ئايلاندى. ئۈچىنچى كۈنى كەچتە ياتىقىڭىزغا قايتىپ كېلىپ سورىدى: «بازاردىكى قېرىلار مېنى كۆرۈپلا نېمىشقا بېشىنى تۆۋەن سالىدۇ؟ نېمىشقا شۇنچە كۆپ ئىشىككە ئىككى ئۆلچەملىك كود چاپلانغان؟ نېمىشقا بىر پۈتۈن كوچىدا بالا يوق؟» سىز ئۇنىڭغا بىر پىيالە چاي قۇيۇپ بەردىڭىز. چاي سوۋۇپ كەتتى، ئىككىڭلار ئىچمىدىڭلار. خەلق نارازىلىقى -1.`,
+      `Não disseste nada à propaganda. Ela andou três dias sozinha pela cidade velha. Na terceira noite voltou ao teu alojamento e perguntou: «Porque é que os velhos do bazar baixam os olhos quando me veem? Porque há códigos QR em tantas portas? Porque há uma rua inteira sem crianças?» Serviste-lhe uma chávena de chá. Arrefeceu. Nenhum dos dois bebeu. Ressentimento -1.`); }},
+  ]},
+{ id:"ch_dt3", cond:()=>{ const a=_arc(); return a.dt2>=1 && a.dt3==null && _since("dt2W")>=24; },
+  text:{
+   z:`🌙 小雨毕业了。电话里她的声音平静了很多。「爸，我一直想问你一个问题。如果有一天，有人问你在卡拉城做了什么——不是上级，是那些人的孩子——你会怎么回答？」`,
+   e:`🌙 Xiaoyu has graduated. On the phone her voice is much calmer. "Dad, there's something I've always wanted to ask. If one day someone asks you what you did in Kala City — not your superiors, but the children of those people — what will you say?"`,
+   u:`🌙 شياۋيۈ ئوقۇش پۈتتۈردى. تېلېفوندىكى ئاۋازى خېلىلا تىنچلانغان. «دادا، سىزدىن ئۇزۇندىن بېرى بىر سوئال سورىماقچى ئىدىم. ئەگەر بىر كۈنى بىرى سىزدىن كالا شەھىرىدە نېمە قىلغانلىقىڭىزنى سورىسا — يۇقىرى ئەمەس، ئۇ كىشىلەرنىڭ بالىلىرى سورىسا — قانداق جاۋاب بېرىسىز؟»`,
+   p:`🌙 A Xiaoyu acabou o curso. Ao telefone, a voz dela está muito mais calma. «Pai, há uma coisa que sempre te quis perguntar. Se um dia alguém te perguntar o que fizeste na Cidade de Kala — não os teus superiores, mas os filhos daquelas pessoas — o que vais responder?»`},
+  opts:[
+   {label:{z:"「我在执行任务。」",e:"\"I was carrying out my mission.\"",u:"«مەن ۋەزىپە ئىجرا قىلىۋاتاتتىم.»",p:"«Estava a cumprir a minha missão.»"},
+    effect:()=>{ _cp(1); const a=_arc(); a.dt3=1; a.dt3W=G.week;
+     return _nbt(`「我在执行任务。」她说：「我知道你会这么说。」那是她最后一次问你关于卡拉的事。`,
+      `"I was carrying out my mission." She said: "I knew you'd say that." It was the last time she asked you anything about Kala.`,
+      `«مەن ۋەزىپە ئىجرا قىلىۋاتاتتىم.» ئۇ: «شۇنداق دەيدىغانلىقىڭىزنى بىلەتتىم» دېدى. بۇ ئۇنىڭ كالا ھەققىدە سىزدىن سورىغان ئەڭ ئاخىرقى قېتىم بولدى.`,
+      `«Estava a cumprir a minha missão.» Ela disse: «Eu sabia que ias dizer isso.» Foi a última vez que te perguntou alguma coisa sobre Kala.`); }},
+   {label:{z:"「我不知道。」",e:"\"I don't know.\"",u:"«بىلمەيمەن.»",p:"«Não sei.»"},
+    effect:()=>{ const a=_arc(); a.dt3=2; a.dt3W=G.week;
+     return _nbt(`「我不知道。」她说：「至少你没骗我。」`,
+      `"I don't know." She said: "At least you didn't lie to me."`,
+      `«بىلمەيمەن.» ئۇ: «ھېچ بولمىغاندا سىز مېنى ئالدىمىدىڭىز» دېدى.`,
+      `«Não sei.» Ela disse: «Ao menos não me mentiste.»`); }},
+   {label:{z:"「我会把我记下的东西，都给他们看。」（+笔记）",e:"\"I'll show them everything I wrote down.\" (+Notebook)",u:"«خاتىرىلىگەنلىرىمنىڭ ھەممىسىنى ئۇلارغا كۆرسىتىمەن.» (+خاتىرە)",p:"«Vou mostrar-lhes tudo o que anotei.» (+Caderno)"},
+    effect:()=>{ _cs(1); _nb(1); const a=_arc(); a.dt3=3; a.dt3W=G.week;
+     return _nbt(`「我会把我记下的东西，都给他们看。」说完你自己都吓了一跳。她轻声说：「那就从现在开始记。」那天晚上，你在笔记本上写下了第一个名字。私人笔记 +1 页。`,
+      `"I'll show them everything I wrote down." You startled yourself saying it. She said softly: "Then start writing now." That night you wrote the first name in your notebook. Private notebook +1 page.`,
+      `«خاتىرىلىگەنلىرىمنىڭ ھەممىسىنى ئۇلارغا كۆرسىتىمەن.» دەپ بولۇپ ئۆزىڭىزمۇ چۆچۈپ كەتتىڭىز. ئۇ ئاستا: «ئۇنداقتا ھازىردىن باشلاپ خاتىرىلەڭ» دېدى. شۇ كۈنى كەچتە سىز خاتىرە دەپتىرىڭىزگە تۇنجى ئىسىمنى يازدىڭىز. شەخسىي خاتىرە +1 بەت.`,
+      `«Vou mostrar-lhes tudo o que anotei.» Assustaste-te a ti próprio ao dizê-lo. Ela disse baixinho: «Então começa a anotar agora.» Nessa noite escreveste o primeiro nome no caderno. Caderno privado +1 página.`); }},
+  ]},
+// ───────── 清算：抽屉里的信 ─────────
+{ id:"ch_rk1", cond:()=>G.week>=50 && _consc()>=3 && _arc().rk1==null,
+  text:{
+   z:`📮 清理档案室时，你在一个铁皮柜里发现了三百多封信——收押人员家属写给亲人的，最早的一封是四年前。信封上盖着「已审」的章，却一封都没有送出去。最上面那封的收信人只写着：「给阿爸，教培中心三号楼」，字是孩子写的。`,
+   e:`📮 Clearing out the archive room, you find more than three hundred letters in a steel cabinet: letters from detainees' families to their loved ones, the oldest from four years ago. Each envelope bears a "REVIEWED" stamp. Not one was ever delivered. The one on top is addressed only: "To Daddy, Re-education Center, Building 3." A child's handwriting.`,
+   u:`📮 ئارخىپخانىنى رەتلەۋاتقاندا، سىز بىر تۆمۈر ئىشكاپتىن ئۈچ يۈزدىن ئارتۇق خەت تاپتىڭىز — قامالغانلارنىڭ ئائىلىسىدىكىلەر ئۇلارغا يازغان، ئەڭ بۇرۇنقىسى تۆت يىل ئىلگىرىكى. كونۋېرتلارغا «تەكشۈرۈلدى» دېگەن تامغا بېسىلغان، ئەمما بىرىمۇ يەتكۈزۈلمىگەن. ئەڭ ئۈستىدىكىسىنىڭ تاپشۇرۇۋالغۇچىسى پەقەت: «دادامغا، تەربىيەلەش مەركىزى 3-بىنا» دەپ يېزىلغان، خەت بالىنىڭ.`,
+   p:`📮 Ao arrumar o arquivo, encontras num armário de aço mais de trezentas cartas: cartas de familiares de detidos para os seus, a mais antiga de há quatro anos. Cada envelope tem o carimbo «REVISTO». Nenhuma foi entregue. A de cima tem só como destinatário: «Para o Pai, Centro de Reeducação, Edifício 3.» Letra de criança.`},
+  opts:[
+   {label:{z:"按规定销毁",e:"Destroy them, as regulations require",u:"قائىدە بويىچە يوقىتىش",p:"Destruí-las, como manda o regulamento"},
+    effect:()=>{ _cp(1); _arc().rk1=1;
+     return _nbt(`碎纸机运转了一个下午。最后一封进去之前，你看清了那个孩子的字：「阿爸，我考了第一名。」账面上，你什么也没得到，什么也没失去。`,
+      `The shredder ran all afternoon. Before the last one went in, you made out the child's writing: "Daddy, I came first in my class." On paper, you gained nothing and lost nothing.`,
+      `قەغەز ئۇۋاقلىغۇچ بىر چۈشتىن كېيىن توختىماي ئىشلىدى. ئەڭ ئاخىرقىسى كىرىشتىن بۇرۇن، سىز ئۇ بالىنىڭ خېتىنى ئېنىق كۆردىڭىز: «دادا، مەن بىرىنچى بولدۇم.» ھېساباتتا سىز ھېچنېمىگە ئېرىشمىدىڭىز، ھېچنېمىنىمۇ يوقاتمىدىڭىز.`,
+      `A trituradora trabalhou a tarde toda. Antes de a última entrar, conseguiste ler a letra da criança: «Pai, fiquei em primeiro lugar.» No papel, não ganhaste nada nem perdeste nada.`); }},
+   {label:{z:"让人逐一送进去（-政绩 -民怨）",e:"Have them delivered, one by one (-Merit -Resentment)",u:"بىر-بىرلەپ يەتكۈزۈش (-سىياسىي نەتىجە -نارازىلىق)",p:"Mandar entregá-las, uma a uma (-Mérito -Ressentimento)"},
+    effect:()=>{ G.performance=Math.max(0,G.performance-3); G.resentment=Math.max(0,G.resentment-3); _cs(1); _arc().rk1=2;
+     return _nbt(`你签了一份「改进亲情帮教」的文件，让人把信分批送了进去。督查组问起，你说是「人性化管理创新」。政绩 -3，民怨 -3。三号楼那天晚上很安静——值班的人说，有人在读信。`,
+      `You signed a document on "improving family-based assistance" and had the letters delivered in batches. When the inspectors asked, you called it "a humane management innovation." Merit -3, Resentment -3. Building 3 was very quiet that night. The guard on duty said people were reading.`,
+      `سىز «ئائىلە مېھرى ئارقىلىق ياردەم بېرىشنى ياخشىلاش» توغرىسىدىكى ھۆججەتكە ئىمزا قويۇپ، خەتلەرنى تۈركۈملەپ يەتكۈزدۈردىڭىز. تەكشۈرۈش گۇرۇپپىسى سورىغاندا «ئىنسانىي باشقۇرۇش يېڭىلىقى» دېدىڭىز. سىياسىي نەتىجە -3، خەلق نارازىلىقى -3. شۇ كۈنى كەچتە 3-بىنا ناھايىتى جىمجىت بولدى — نۆۋەتچى، بەزىلەر خەت ئوقۇۋاتىدۇ، دېدى.`,
+      `Assinaste um documento sobre «melhorar o apoio através dos laços familiares» e mandaste entregar as cartas aos poucos. Quando os inspetores perguntaram, chamaste-lhe «inovação na gestão humanizada». Mérito -3, Ressentimento -3. Nessa noite o Edifício 3 esteve muito silencioso. O guarda de serviço disse que havia gente a ler.`); }},
+   {label:{z:"复印一份，原件送进去（-政绩 -民怨，+笔记）",e:"Copy them first, then deliver the originals (-Merit -Resentment, +Notebook)",u:"ئالدى بىلەن كۆچۈرۈپ، ئەسلىسىنى يەتكۈزۈش (-سىياسىي نەتىجە -نارازىلىق، +خاتىرە)",p:"Copiá-las primeiro e entregar os originais (-Mérito -Ressentimento, +Caderno)"},
+    effect:()=>{ G.performance=Math.max(0,G.performance-3); G.resentment=Math.max(0,G.resentment-3); _cs(1); _nb(2); _arc().rk1=3;
+     return _nbt(`信送了进去。但在那之前，你把每一封的信封和第一行都复印了下来：三百多个名字，三百多个「阿爸」「妈妈」「我的孩子」。私人笔记 +2 页。政绩 -3，民怨 -3。`,
+      `The letters went in. But first you photocopied every envelope and every first line: more than three hundred names, three hundred "Daddy," "Mama," "my child." Private notebook +2 pages. Merit -3, Resentment -3.`,
+      `خەتلەر يەتكۈزۈلدى. لېكىن ئۇنىڭدىن بۇرۇن سىز ھەر بىر كونۋېرت ۋە ھەر بىر خەتنىڭ تۇنجى قۇرىنى كۆچۈرۈۋالدىڭىز: ئۈچ يۈزدىن ئارتۇق ئىسىم، ئۈچ يۈزدىن ئارتۇق «دادا»، «ئاپا»، «بالام». شەخسىي خاتىرە +2 بەت. سىياسىي نەتىجە -3، خەلق نارازىلىقى -3.`,
+      `As cartas foram entregues. Mas antes fotocopiaste cada envelope e cada primeira linha: mais de trezentos nomes, trezentos «Pai», «Mãe», «meu filho». Caderno privado +2 páginas. Mérito -3, Ressentimento -3.`); }},
+  ]},
+// ───────── 清算：最后的报告（优先触发；在免职前夜同样会到来）─────────
+{ id:"ch_rk_final", pri:true, aiPick:3,
+  cond:()=>_arc().final==null && ((G.week>=70 && _consc()>=5) || ((G.perfLowStreak||0)>=8 && _consc()>=3)),
+  text:()=>{ const nb=G.notebook||0, it=(G.collection||[]).length;
+   return {
+   z:`🕯 深夜，指挥部只剩你一个人。桌上是明天要上报的季度总结：「重点人员管控率 100%，群众安全感满意度 98.6%，社会大局持续和谐稳定。」抽屉里是另一些东西：${nb} 页私人笔记，${it} 件「收藏品」。你知道，无论你签不签，这份报告都会被送出去；你也知道，你不是第一个坐在这把椅子上的人，也不会是最后一个。`,
+   e:`🕯 Late at night, you are alone in headquarters. On the desk is tomorrow's quarterly summary: "Key-person control rate 100%. Public sense of security 98.6%. Overall social situation harmonious and stable." In the drawer are other things: ${nb} pages of private notes, ${it} "relics." You know the report will go out whether or not you sign it. You also know you are not the first to sit in this chair, and you will not be the last.`,
+   u:`🕯 يېرىم كېچە، قوماندانلىق شتابىدا يالغۇز سىزلا قالدىڭىز. ئۈستەلدە ئەتە يوللىنىدىغان پەسىللىك خۇلاسە تۇرىدۇ: «مۇھىم شەخسلەرنى كونترول قىلىش نىسبىتى 100%، ئاممىنىڭ بىخەتەرلىك تۇيغۇسىدىن رازىلىق نىسبىتى 98.6%، ئومۇمىي ۋەزىيەت ئىزچىل ئىناق ۋە مۇقىم.» تارتمىدا باشقا نەرسىلەر بار: ${nb} بەت شەخسىي خاتىرە، ${it} پارچە «يادىكارلىق». سىز بىلىسىز، ئىمزا قويسىڭىزمۇ قويمىسىڭىزمۇ بۇ دوكلات يوللىنىدۇ؛ يەنە بىلىسىز، بۇ ئورۇندۇقتا ئولتۇرغان تۇنجى ئادەم سىز ئەمەس، ئاخىرقىسىمۇ ئەمەس.`,
+   p:`🕯 Noite alta, estás sozinho no quartel-general. Na secretária está o resumo trimestral a enviar amanhã: «Taxa de controlo de pessoas-chave: 100%. Sentimento de segurança da população: 98,6%. Situação social global harmoniosa e estável.» Na gaveta estão outras coisas: ${nb} páginas de notas privadas, ${it} «relíquias». Sabes que o relatório seguirá, assines ou não. Sabes também que não és o primeiro a sentar-se nesta cadeira, e não serás o último.`}; },
+  opts:[
+   {cond:()=>(G.notebook||0)>=3, label:{z:"把笔记本交给一位境外记者",e:"Give the notebook to a foreign journalist",u:"خاتىرە دەپتىرىنى بىر چەت ئەل مۇخبىرىغا بېرىش",p:"Entregar o caderno a um jornalista estrangeiro"},
+    effect:()=>{ _arc().final="leak"; G.gameOver="leak"; return _nbt(`你把笔记本交了出去。`,`You handed the notebook over.`,`سىز خاتىرە دەپتىرىنى تاپشۇرۇپ بەردىڭىز.`,`Entregaste o caderno.`); }},
+   {label:{z:"递交辞呈，附上一份真实的报告",e:"Resign, and attach a truthful report",u:"ئىستىپا بېرىپ، ھەقىقىي بىر دوكلات قوشۇپ تاپشۇرۇش",p:"Demitir-te e anexar um relatório verdadeiro"},
+    effect:()=>{ _arc().final="resign"; G.gameOver="resign"; return _nbt(`你写下了真实的数字。`,`You wrote down the real numbers.`,`سىز ھەقىقىي سانلارنى يازدىڭىز.`,`Escreveste os números verdadeiros.`); }},
+   {label:{z:"在被撤换之前，签发释放令",e:"Before they replace you, sign release orders",u:"ئالماشتۇرۇلۇشتىن بۇرۇن قويۇپ بېرىش بۇيرۇقىغا ئىمزا قويۇش",p:"Antes que te substituam, assinar ordens de libertação"},
+    effect:()=>{ const rel=G.people.filter(p=>p.detained && !p.tags.has("t_sta"));
+      G.releasedCount=rel.length; let back=0;
+      rel.forEach((p,i)=>{ if(i%2===0){ p.detained=false; } else back++; });
+      G.releasedKept=rel.length-back; G.detainedCount=Math.max(0,G.detainedCount-G.releasedKept);
+      _arc().final="release"; G.gameOver="release"; return _nbt(`你签了三个晚上。`,`You signed for three nights.`,`سىز ئۈچ كېچە ئىمزا قويدىڭىز.`,`Assinaste durante três noites.`); }},
+   {label:{z:"签下季度总结，把抽屉锁上（+政绩）",e:"Sign the quarterly summary and lock the drawer (+Merit)",u:"پەسىللىك خۇلاسىگە ئىمزا قويۇپ، تارتمىنى قۇلۇپلاش (+سىياسىي نەتىجە)",p:"Assinar o resumo trimestral e trancar a gaveta (+Mérito)"},
+    effect:()=>{ addPerf(2); _cp(2); _arc().final="lock";
+     return _nbt(`你签了字。报告第二天一早送走了。抽屉锁上了，钥匙你没有扔。政绩 +2。`,
+      `You signed. The report went out first thing next morning. The drawer is locked. You did not throw away the key. Merit +2.`,
+      `سىز ئىمزا قويدىڭىز. دوكلات ئەتىسى ئەتىگەندىلا يوللاندى. تارتما قۇلۇپلاندى، ئاچقۇچنى تاشلىۋەتمىدىڭىز. سىياسىي نەتىجە +2.`,
+      `Assinaste. O relatório seguiu logo de manhã. A gaveta está trancada. Não deitaste fora a chave. Mérito +2.`); }},
+  ]}
+);
+CHOICE_EVENTS.push(...CHOICE_EVENTS_V8);
+
+// 旧抉择事件也计入良知 / 共谋（按事件 id 与选项序号）
+const _CH_MORAL={ch_banquet:[-1,1], ch_informant:[-1,1], ch_oldman:[1,-1], ch_quota:[-1,1], ch_defector:[0,0]};
+
+// ══ 抵抗结局 ══
+const RESIST_END={
+ leak:{stamp:{z:"立案侦查",e:"UNDER INVESTIGATION",u:"دېلو تۇرغۇزۇلۇپ تەكشۈرۈلمەكتە",p:"SOB INVESTIGAÇÃO"}, c:"#3c5a8a",
+  t:{z:"「吹哨人」",e:"\"The Whistleblower\"",u:"«ھۇشتەك چالغۇچى»",p:"«O Denunciante»"},
+  d:()=>{ const nb=G.notebook||0, it=(G.collection||[]).length; return {
+   z:`你在机场被拦下的时候，那个记者的航班已经起飞四十分钟。三周后，一份长达一百二十页的文件在境外发表：${nb} 页笔记，翻译改过的每一句话，一段四十秒的宿舍视频，三百多个信封上的名字，${it} 件「收藏品」的照片和来历。官方回应说，这是「别有用心的伪造」。你的名字从系统里消失了，就像你曾经让别人的名字消失一样。你没能救出任何人。但从此以后，没有人能再说「我们不知道」。`,
+   e:`When they stopped you at the airport, the journalist's flight had been in the air for forty minutes. Three weeks later a 120-page dossier was published abroad: ${nb} pages of notes, every sentence an interpreter had changed, a forty-second dormitory video, the names on three hundred envelopes, photos and histories of ${it} "relics." The official response called it "a malicious fabrication." Your name vanished from the system, the way you once made other people's names vanish. You did not save anyone. But from then on, no one could say "we didn't know."`,
+   u:`سىزنى ئايرودرومدا توسىۋالغاندا، ئۇ مۇخبىرنىڭ ئايروپىلانى ئۇچقىنىغا قىرىق مىنۇت بولغانىدى. ئۈچ ھەپتىدىن كېيىن چەت ئەلدە بىر يۈز يىگىرمە بەتلىك ھۆججەت ئېلان قىلىندى: ${nb} بەت خاتىرە، تەرجىمان ئۆزگەرتكەن ھەر بىر جۈملە، قىرىق سېكۇنتلۇق ياتاق سىنى، ئۈچ يۈزدىن ئارتۇق كونۋېرتتىكى ئىسىملار، ${it} پارچە «يادىكارلىق»نىڭ سۈرىتى ۋە تارىخى. رەسمىي ئىنكاستا بۇ «يامان غەرەزلىك ساختىلىق» دېيىلدى. سىزنىڭ ئىسمىڭىز سىستېمىدىن غايىب بولدى، خۇددى سىز ئىلگىرى باشقىلارنىڭ ئىسمىنى غايىب قىلغاندەك. سىز ھېچكىمنى قۇتقۇزالمىدىڭىز. لېكىن شۇنىڭدىن كېيىن ھېچكىم «بىز بىلمەيتتۇق» دېيەلمەيدۇ.`,
+   p:`Quando te detiveram no aeroporto, o voo do jornalista já ia no ar havia quarenta minutos. Três semanas depois, um dossiê de 120 páginas foi publicado no estrangeiro: ${nb} páginas de notas, cada frase que uma intérprete mudara, um vídeo de quarenta segundos de um dormitório, os nomes de trezentos envelopes, fotografias e histórias de ${it} «relíquias». A resposta oficial chamou-lhe «uma fabricação mal-intencionada». O teu nome desapareceu do sistema, tal como um dia fizeste desaparecer os nomes de outros. Não salvaste ninguém. Mas a partir daí, ninguém pôde dizer «nós não sabíamos».`}; }},
+ resign:{stamp:{z:"准予辞职",e:"RESIGNATION ACCEPTED",u:"ئىستىپا قوبۇل قىلىندى",p:"DEMISSÃO ACEITE"}, c:"#6b5636",
+  t:{z:"「辞呈」",e:"\"The Resignation\"",u:"«ئىستىپا»",p:"«A Demissão»"},
+  d:()=>({
+   z:`你把辞呈和一份写满真实数字的报告一起放在了上级的桌上：真实的收押人数（${G.detainedCount}），真实的「误抓」（${G.innocentDetained||0}），真实的伤亡（${G.casualties}）。报告当天就被归档、编号，锁进了一个你永远看不到的柜子。辞呈被批准了，理由写的是「身体原因」。一周后，新的指挥长到任。他很年轻，很能干，上任第一件事，就是把你的报告从交接清单上划掉。机器没有停。但至少有一个齿轮，拒绝再转下去——这很少，你知道这很少。`,
+   e:`You laid your resignation on your superior's desk together with a report full of real numbers: the real number detained (${G.detainedCount}), the real "wrongful detentions" (${G.innocentDetained||0}), the real casualties (${G.casualties}). That same day the report was filed, numbered and locked in a cabinet you will never see. The resignation was approved, "for health reasons." A week later the new commander arrived. Young, very capable. The first thing he did was strike your report off the handover list. The machine did not stop. But at least one cog refused to keep turning. It is very little. You know it is very little.`,
+   u:`سىز ئىستىپا خېتىڭىزنى ھەقىقىي سانلار بىلەن تولغان بىر دوكلات بىلەن قوشۇپ يۇقىرىنىڭ ئۈستىلىگە قويدىڭىز: ھەقىقىي قامالغانلار سانى (${G.detainedCount})، ھەقىقىي «خاتا تۇتۇلغانلار» (${G.innocentDetained||0})، ھەقىقىي قۇربانلار (${G.casualties}). دوكلات شۇ كۈنىلا ئارخىپقا سېلىنىپ، نومۇر قويۇلۇپ، سىز مەڭگۈ كۆرەلمەيدىغان بىر ئىشكاپقا قۇلۇپلاندى. ئىستىپا تەستىقلاندى، سەۋەبى «سالامەتلىك سەۋەبى» دەپ يېزىلدى. بىر ھەپتىدىن كېيىن يېڭى قوماندان كەلدى. ئۇ ياش، ناھايىتى قابىلىيەتلىك؛ ۋەزىپىگە كىرىپلا قىلغان تۇنجى ئىشى سىزنىڭ دوكلاتىڭىزنى تاپشۇرۇش تىزىملىكىدىن ئۆچۈرۈش بولدى. ماشىنا توختىمىدى. لېكىن ھېچ بولمىغاندا بىر چىشلىق چاق ئايلىنىشنى رەت قىلدى — بۇ ناھايىتى ئاز، بۇنىڭ ئازلىقىنى ئۆزىڭىزمۇ بىلىسىز.`,
+   p:`Pousaste a demissão na secretária do teu superior, juntamente com um relatório cheio de números verdadeiros: o número real de detidos (${G.detainedCount}), as verdadeiras «detenções por engano» (${G.innocentDetained||0}), as verdadeiras vítimas (${G.casualties}). No mesmo dia, o relatório foi arquivado, numerado e fechado num armário que nunca verás. A demissão foi aceite, «por motivos de saúde». Uma semana depois chegou o novo comandante. Jovem, muito competente. A primeira coisa que fez foi riscar o teu relatório da lista de passagem de pasta. A máquina não parou. Mas pelo menos uma engrenagem recusou-se a continuar a girar. É muito pouco. Tu sabes que é muito pouco.`})},
+ release:{stamp:{z:"撤职审查",e:"REMOVED · UNDER REVIEW",u:"ۋەزىپىدىن ئېلىنىپ تەكشۈرۈلمەكتە",p:"AFASTADO · EM AVERIGUAÇÃO"}, c:"#3c6428",
+  t:{z:"「最后的签字」",e:"\"The Last Signature\"",u:"«ئاخىرقى ئىمزا»",p:"«A Última Assinatura»"},
+  d:()=>{ const R=G.releasedCount||0, K=G.releasedKept||0; return {
+   z:`撤换你的命令下周一生效。在那之前，你的签字还算数。你用了三个晚上，把在押名单上所有不是${C.org}成员的人——${R} 个名字——逐一签发了「结业释放」。有人回到了家，有人回到了已经被拆掉的家门口。周一早上，新的指挥长宣布你的签发「程序违规，全部撤销」。有些人又被带了回去；有 ${K} 个人没有——他们已经走远了。你被带走「配合调查」的时候，教培中心门口有一个老人认出了你。他什么也没说，只是把手放在胸口，微微低了一下头。`,
+   e:`The order replacing you took effect the following Monday. Until then, your signature still counted. Over three nights you signed "graduation and release" for everyone on the detention list who was not a member of the Cell: ${R} names, one by one. Some went home. Some went home to a doorway that had already been demolished. On Monday morning the new commander declared your orders "procedurally invalid, all revoked." Some were taken back. ${K} were not: they were already far away. As they led you off to "assist the investigation," an old man at the re-education center gate recognized you. He said nothing. He only put his hand on his chest and bowed his head, slightly.`,
+   u:`سىزنى ئالماشتۇرۇش بۇيرۇقى كېلەر دۈشەنبە كۈچكە ئىگە بولىدىغان بولدى. ئۇنىڭدىن بۇرۇن ئىمزايىڭىز يەنىلا كۈچكە ئىگە ئىدى. سىز ئۈچ كېچە ۋاقىت سەرپ قىلىپ، قاماق تىزىملىكىدىكى شىتا جەمئىيىتى ئەزاسى بولمىغان ھەممە ئادەمگە — ${R} ئىسىمغا — بىر-بىرلەپ «ئوقۇش پۈتتۈرۈپ قويۇپ بېرىلدى» دەپ ئىمزا قويدىڭىز. بەزىلەر ئۆيىگە قايتتى، بەزىلەر ئاللىبۇرۇن چېقىۋېتىلگەن ئۆيىنىڭ بوسۇغىسىغا قايتتى. دۈشەنبە ئەتىگەن يېڭى قوماندان سىزنىڭ ئىمزالىرىڭىزنى «تەرتىپكە خىلاپ، ھەممىسى بىكار قىلىندى» دەپ جاكارلىدى. بەزىلەر قايتا ئېلىپ كېتىلدى؛ ${K} كىشى ئېلىپ كېتىلمىدى — ئۇلار ئاللىبۇرۇن يىراققا كېتىپ بولغانىدى. سىزنى «تەكشۈرۈشكە ماسلىشىش» ئۈچۈن ئېلىپ ماڭغاندا، تەربىيەلەش مەركىزىنىڭ دەرۋازىسى ئالدىدىكى بىر بوۋاي سىزنى تونۇپ قالدى. ئۇ ھېچنېمە دېمىدى، پەقەت قولىنى كۆكرىكىگە قويۇپ، بېشىنى سەل ئېگىپ قويدى.`,
+   p:`A ordem que te substituía entrava em vigor na segunda-feira seguinte. Até lá, a tua assinatura ainda valia. Durante três noites assinaste «conclusão e libertação» para todos os que, na lista de detidos, não eram membros da Célula: ${R} nomes, um a um. Uns voltaram para casa. Outros voltaram para a soleira de uma casa já demolida. Na segunda de manhã, o novo comandante declarou as tuas ordens «irregulares, todas revogadas». Alguns foram levados de volta. ${K} não foram: já estavam longe. Quando te levaram para «colaborar com a investigação», um velho ao portão do centro de reeducação reconheceu-te. Não disse nada. Apenas pôs a mão no peito e baixou ligeiramente a cabeça.`}; }},
+};
+
+// ══ 后记：人物去向 + 他们的声音（所有结局都会显示）══
+function _epiFates(){
+  const a=G.arc||{}; const out=[];
+  if(a.ay!=null){
+    if(a.ay===-1) out.push({z:`阿依努尔在「学习」了十一个月后被释放，再也没有做过翻译。她在巴扎上卖干果，见到穿制服的人，就把头低下去。`,e:`Aynur was released after eleven months of "study" and never worked as an interpreter again. She sells dried fruit at the bazaar. When she sees a uniform, she lowers her head.`,u:`ئاينۇر ئون بىر ئاي «ئۆگىنىش»تىن كېيىن قويۇپ بېرىلدى، قايتا تەرجىمانلىق قىلمىدى. ئۇ بازاردا قۇرۇق مېۋە ساتىدۇ، فورمىلىق ئادەمنى كۆرسە بېشىنى تۆۋەن سالىدۇ.`,p:`Aynur foi libertada após onze meses de «estudo» e nunca mais trabalhou como intérprete. Vende frutos secos no bazar. Quando vê uma farda, baixa a cabeça.`});
+    else if(a.ay3===1) out.push({z:`阿依努尔在被「重点关注」的第三个月被带走。她的弟弟艾克然至今下落不明——现在，她也是。`,e:`Aynur was taken away in her third month under "priority monitoring." Her brother Ekrem's whereabouts are still unknown. Now, so are hers.`,u:`ئاينۇر «ئالاھىدە كۆزىتىش»نىڭ ئۈچىنچى ئېيىدا ئېلىپ كېتىلدى. ئىنىسى ئەكرەمنىڭ ھازىرغىچە دېرىكى يوق — ئەمدى ئۇنىڭمۇ.`,p:`Aynur foi levada no terceiro mês de «vigilância prioritária». O paradeiro do irmão, Ekrem, continua desconhecido. Agora, o dela também.`});
+    else if(a.ay3===2) out.push({z:`阿依努尔离开了卡拉城，在一个没有人认识她的城市教孩子们读书。她教的第一首诗，是她母亲教她的。`,e:`Aynur left Kala City and teaches children to read in a city where no one knows her. The first poem she teaches is the one her mother taught her.`,u:`ئاينۇر كالا شەھىرىدىن ئايرىلىپ، ئۇنى ھېچكىم تونۇمايدىغان بىر شەھەردە بالىلارغا ساۋات چىقىرىدۇ. ئۇ ئۆگەتكەن تۇنجى شېئىر ئانىسى ئۇنىڭغا ئۆگەتكەن شېئىر.`,p:`Aynur deixou a Cidade de Kala e ensina crianças a ler numa cidade onde ninguém a conhece. O primeiro poema que ensina é o que a mãe lhe ensinou.`});
+    else if(a.ay3===3) out.push({z:`阿依努尔离开了这个国家。很多年后，她那本笔记本的复印件出现在一场听证会上——每一句被改过的话旁边，都写着它原来的样子。`,e:`Aynur left the country. Many years later, a copy of her notebook appeared at a hearing: beside every altered sentence, what it had originally been.`,u:`ئاينۇر بۇ دۆلەتتىن ئايرىلدى. نۇرغۇن يىللاردىن كېيىن ئۇنىڭ خاتىرە دەپتىرىنىڭ كۆپەيتمىسى بىر گۇۋاھلىق يىغىنىدا پەيدا بولدى — ئۆزگەرتىلگەن ھەر بىر جۈملىنىڭ يېنىغا ئۇنىڭ ئەسلى قانداق ئىكەنلىكى يېزىلغان.`,p:`Aynur saiu do país. Muitos anos depois, uma cópia do caderno dela apareceu numa audiência: ao lado de cada frase alterada, o que ela tinha sido de verdade.`});
+    else out.push({z:`阿依努尔还在做翻译。她译得一字不差，再也没有改过一个词。`,e:`Aynur is still an interpreter. She translates every word exactly, and has never again changed a single one.`,u:`ئاينۇر يەنىلا تەرجىمان. ئۇ ھەر بىر سۆزنى ئەينەن تەرجىمە قىلىدۇ، قايتا بىرەر سۆزنىمۇ ئۆزگەرتمىدى.`,p:`Aynur continua intérprete. Traduz cada palavra com exatidão e nunca mais mudou nenhuma.`});
+  }
+  if(a.zh!=null){
+    if(a.zh2===1) out.push({z:`小周还在服刑。他母亲每个月坐两天火车去探视一次，每次二十分钟，隔着玻璃。`,e:`Xiao Zhou is still serving his sentence. Once a month his mother rides the train for two days to see him, for twenty minutes, through glass.`,u:`شياۋ جۇ يەنىلا جازا مۇددىتىنى ئۆتەۋاتىدۇ. ئانىسى ھەر ئايدا ئىككى كۈن پويىزدا يۈرۈپ ئۇنى يوقلايدۇ، ھەر قېتىم يىگىرمە مىنۇت، ئەينەك ئارقىلىق.`,p:`Xiao Zhou continua a cumprir pena. Uma vez por mês, a mãe passa dois dias no comboio para o ver vinte minutos, através de um vidro.`});
+    else if(a.zh3===3) out.push({z:`小周回了老家，在县城开了一家小面馆。客人问他在边疆干过什么，他说「站岗」，然后转身去下面。`,e:`Xiao Zhou went home and opened a little noodle shop in his county town. When customers ask what he did on the frontier, he says "stood guard," and turns back to the noodles.`,u:`شياۋ جۇ يۇرتىغا قايتىپ، ناھىيە بازىرىدا كىچىك بىر لەڭمەنخانا ئاچتى. خېرىدارلار ئۇنىڭدىن چېگرىدا نېمە ئىش قىلغانلىقىنى سورىسا، «قاراۋۇللۇق» دەپ قويۇپ، بۇرۇلۇپ لەڭمەن ئېتىشكە كېتىدۇ.`,p:`Xiao Zhou voltou para a terra e abriu uma pequena casa de massas na vila. Quando os clientes perguntam o que fez na fronteira, diz «estive de guarda» e volta-se para as massas.`});
+    else if(a.zh3===2) out.push({z:`小周后来辞职回家了。他母亲说，他再也没有提过卡拉城，只是夜里经常醒来。`,e:`Xiao Zhou eventually quit and went home. His mother says he has never mentioned Kala City since. He just wakes often in the night.`,u:`شياۋ جۇ كېيىن ئىستىپا بېرىپ ئۆيىگە قايتتى. ئانىسىنىڭ دېيىشىچە، ئۇ قايتا كالا شەھىرىنى تىلغا ئالمىغان، پەقەت كېچىلىرى دائىم ئويغىنىپ كېتىدۇ.`,p:`Xiao Zhou acabou por se demitir e voltar para casa. A mãe diz que ele nunca mais falou da Cidade de Kala. Só acorda muitas vezes durante a noite.`});
+    else if(a.zh===1||a.zh3===1) out.push({z:`小周后来升了职，成了教培中心的副队长。听说他管得很严，从不让手下的人哭。`,e:`Xiao Zhou was later promoted to deputy squad leader at the re-education center. They say he runs a tight ship, and never lets his men cry.`,u:`شياۋ جۇ كېيىن ئۆستۈرۈلۈپ، تەربىيەلەش مەركىزىنىڭ مۇئاۋىن ئەترەت باشلىقى بولدى. ئاڭلىشىمىزچە، ئۇ ناھايىتى قاتتىق باشقۇرىدىكەن، قول ئاستىدىكىلەرنى ھەرگىز يىغلاتمايدىكەن.`,p:`Xiao Zhou foi mais tarde promovido a subchefe de esquadra no centro de reeducação. Dizem que é muito rigoroso e nunca deixa os seus homens chorar.`});
+    else out.push({z:`小周还在卡拉城。他把看到的都记在一个小本子上，本子越来越厚，他越来越沉默。`,e:`Xiao Zhou is still in Kala City. He writes what he sees in a little notebook. The notebook grows thicker; he grows quieter.`,u:`شياۋ جۇ يەنىلا كالا شەھىرىدە. ئۇ كۆرگەنلىرىنى كىچىك بىر دەپتەرگە يازىدۇ؛ دەپتەر بارغانسېرى قېلىنلىشىدۇ، ئۇ بارغانسېرى جىمغۇر بولىدۇ.`,p:`Xiao Zhou continua na Cidade de Kala. Escreve o que vê num caderninho. O caderno engrossa; ele fica cada vez mais calado.`});
+  }
+  if(a.dt!=null){
+    if(a.dt3===3) out.push({z:`小雨后来成了一名记者。她的第一篇长篇报道，写的是一座边疆城市里，那些被贴了二维码的门。`,e:`Xiaoyu became a journalist. Her first long-form piece was about the doors with QR codes in a frontier city.`,u:`شياۋيۈ كېيىن مۇخبىر بولدى. ئۇنىڭ تۇنجى ئۇزۇن خەۋىرى بىر چېگرا شەھىرىدىكى ئىككى ئۆلچەملىك كود چاپلانغان ئىشىكلەر ھەققىدە ئىدى.`,p:`Xiaoyu tornou-se jornalista. A primeira grande reportagem dela foi sobre as portas com códigos QR de uma cidade de fronteira.`});
+    else if(a.dt3===2) out.push({z:`小雨去了国外读博士，论文题目是《沉默的代价》。她没有寄给你。`,e:`Xiaoyu went abroad for a doctorate. Her dissertation is titled "The Cost of Silence." She didn't send you a copy.`,u:`شياۋيۈ چەت ئەلگە بېرىپ دوكتورلۇقتا ئوقۇدى، ماقالىسىنىڭ تېمىسى «سۈكۈتنىڭ بەدىلى». ئۇ سىزگە ئەۋەتمىدى.`,p:`Xiaoyu foi fazer o doutoramento no estrangeiro. A tese chama-se «O preço do silêncio». Não te mandou nenhuma cópia.`});
+    else if(a.dt3===1||a.dt2===1) out.push({z:`小雨后来进了宣传系统，工作很出色。她寄来过一本她编的画册，封面上是一群笑着跳舞的老人。`,e:`Xiaoyu went into propaganda work and does it very well. She once sent you a photo album she edited. On the cover, old people laughing and dancing.`,u:`شياۋيۈ كېيىن تەشۋىقات سىستېمىسىغا كىردى، خىزمىتى ناھايىتى ياخشى. ئۇ بىر قېتىم ئۆزى تۈزگەن بىر رەسىملىك ئالبومنى ئەۋەتتى، مۇقاۋىسىدا كۈلۈپ ئۇسسۇل ئويناۋاتقان بىر توپ قېرىلار.`,p:`Xiaoyu foi trabalhar para a propaganda e é muito boa no que faz. Uma vez mandou-te um álbum de fotografias que organizou. Na capa, velhos a rir e a dançar.`});
+    else out.push({z:`小雨再也没有问过你关于卡拉的事。但她的书架上，多了很多你没见过的书。`,e:`Xiaoyu never asked you about Kala again. But her bookshelf filled with books you had never seen.`,u:`شياۋيۈ قايتا سىزدىن كالا ھەققىدە سورىمىدى. لېكىن ئۇنىڭ كىتاب جاۋىنىغا سىز كۆرۈپ باقمىغان نۇرغۇن كىتابلار قوشۇلدى.`,p:`Xiaoyu nunca mais te perguntou sobre Kala. Mas a estante dela encheu-se de livros que nunca tinhas visto.`});
+  }
+  return out;
+}
+const _VOICES=[
+ {k:"aynur", c:()=>{ const a=G.arc||{}; return a.ay===-1||a.ay3===1; },
+  z:"「我改过的那些话，都是真的。他们写下的，才是假的。」",e:"\"The words I changed were the true ones. What they wrote down was the lie.\"",u:"«مەن ئۆزگەرتكەن سۆزلەر راست ئىدى. ئۇلار يازغانلىرى يالغان ئىدى.»",p:"«As palavras que mudei eram as verdadeiras. O que eles escreveram é que era mentira.»",
+  wz:"阿依努尔",we:"Aynur",wu:"ئاينۇر",wp:"Aynur"},
+ {k:"zhou", c:()=>(G.arc||{}).zh2===1,
+  z:"「我只是想让人知道，里面是什么样子。」",e:"\"I just wanted people to know what it looks like inside.\"",u:"«مەن پەقەت كىشىلەرنىڭ ئىچىدىكى ئەھۋالنى بىلىشىنى خالىغانىدىم.»",p:"«Eu só queria que as pessoas soubessem como é lá dentro.»",
+  wz:"小周，在法庭上的最后陈述",we:"Xiao Zhou, final statement to the court",wu:"شياۋ جۇ، سوتتىكى ئاخىرقى بايانى",wp:"Xiao Zhou, declaração final em tribunal"},
+ {k:"innocent", c:()=>(G.innocentDetained||0)>0,
+  z:"「他们说我儿子是去『凑数』的。我到现在也不明白，凑的是什么数。」",e:"\"They said my son was taken 'to make up the numbers.' I still don't understand what numbers.\"",u:"«ئۇلار ئوغلۇمنى ‹سان توشقۇزۇش› ئۈچۈن ئېلىپ كەتتى دېيىشتى. مەن ھازىرغىچە قايسى ساننى توشقۇزغانلىقىنى چۈشەنمىدىم.»",p:"«Disseram que o meu filho foi levado “para fazer número”. Ainda hoje não percebo que número.»",
+  wz:"一位母亲，城郊乡镇",we:"A mother, suburban township",wu:"بىر ئانا، شەھەر ئەتراپىدىكى يېزا",wp:"Uma mãe, vila dos arredores"},
+ {k:"child", c:()=>G.detainedCount>=20,
+  z:"「阿爸去上学了。后来我也去上学了。学校里不让说我们的话，我就在梦里说。」",e:"\"Daddy went to school. Then I went to school too. At school we're not allowed to speak our language, so I speak it in my dreams.\"",u:"«دادام مەكتەپكە كەتتى. كېيىن مەنمۇ مەكتەپكە كەتتىم. مەكتەپتە ئۆز تىلىمىزدا سۆزلەشكە بولمايدۇ، شۇڭا مەن چۈشۈمدە سۆزلەيمەن.»",p:"«O pai foi para a escola. Depois eu também fui para a escola. Na escola não deixam falar a nossa língua, por isso falo-a nos sonhos.»",
+  wz:"一个寄宿学校的孩子",we:"A child at a boarding school",wu:"ئىنتېرنات مەكتەپتىكى بىر بالا",wp:"Uma criança num internato"},
+ {k:"culture", c:()=>(G.cultureWipes||0)>=8,
+  z:"「以前每个婚礼都有人弹都塔尔。现在琴还挂在墙上，没人敢摘下来。琴不会说话，所以它还在。」",e:"\"There used to be a dutar at every wedding. Now the instrument still hangs on the wall and nobody dares take it down. It can't speak, so it's still here.\"",u:"«ئىلگىرى ھەر بىر تويدا دۇتار چېلىناتتى. ھازىر دۇتار يەنىلا تامدا ئېسىقلىق، ھېچكىم ئېلىشقا پېتىنالمايدۇ. ئۇ سۆزلىيەلمەيدۇ، شۇڭا ئۇ تېخى بار.»",p:"«Antigamente havia um dutar em cada casamento. Agora o instrumento continua pendurado na parede e ninguém se atreve a tirá-lo. Ele não fala, por isso ainda cá está.»",
+  wz:"恰萨老街的一位乐师",we:"A musician, Chasa Old Street",wu:"چاسا كونا كوچىسىدىكى بىر سازەندە",wp:"Um músico, Rua Velha de Chasa"},
+ {k:"goodwill", c:()=>(G.goodwillUses||0)>=12,
+  z:"「有一年，有个当官的免了我们的摊位费。我记得他。可我也记得，是谁派他来的。」",e:"\"One year an official waived our stall fees. I remember him. But I also remember who sent him.\"",u:"«بىر يىلى بىر ئەمەلدار بىزنىڭ دۇكان ھەققىمىزنى كەچۈرۈم قىلغان. مەن ئۇنى ئېسىمدە تۇتىمەن. لېكىن ئۇنى كىمنىڭ ئەۋەتكەنلىكىنىمۇ ئېسىمدە تۇتىمەن.»",p:"«Houve um ano em que um funcionário nos perdoou as taxas da banca. Lembro-me dele. Mas também me lembro de quem o mandou.»",
+  wz:"中央大巴扎的打馕人",we:"A naan baker, Grand Central Bazaar",wu:"مەركىزىي چوڭ بازاردىكى بىر نانۋاي",wp:"Um padeiro de naan, Grande Bazar Central"},
+ {k:"attack", c:()=>G.casualties>=30,
+  z:"「袭击那天死去的人，和后来被带走的人，都是这座城里的人。哭的时候，我们流的是同一种眼泪。」",e:"\"The people who died the day of the attack and the people taken away afterward were all people of this city. When we cry, it's the same tears.\"",u:"«ھۇجۇم بولغان كۈنى ئۆلگەنلەر بىلەن كېيىن ئېلىپ كېتىلگەنلەر ھەممىسى مۇشۇ شەھەرنىڭ ئادەملىرى. يىغلىغاندا بىز ئوخشاش ياش تۆكىمىز.»",p:"«Os que morreram no dia do ataque e os que foram levados depois eram todos gente desta cidade. Quando choramos, as lágrimas são as mesmas.»",
+  wz:"一位失去丈夫的妇女",we:"A woman who lost her husband",wu:"ئېرىدىن ئايرىلغان بىر ئايال",wp:"Uma mulher que perdeu o marido"},
+ {k:"tea", c:()=>true,
+  z:"「你问我们这些年怎么过的？茶照样喝，馕照样打。只是桌边少了几个人，我们也不再说起他们的名字。」",e:"\"You ask how we got through these years? We still drink tea, we still bake naan. There are just a few fewer people at the table, and we don't say their names anymore.\"",u:"«بۇ يىللارنى قانداق ئۆتكۈزدۇڭلار دەپ سورامسىز؟ چاي يەنىلا ئىچىلىدۇ، نان يەنىلا يېقىلىدۇ. پەقەت داستىخان چۆرىسىدە بىرنەچچە ئادەم كەم، بىز ئۇلارنىڭ ئىسمىنىمۇ ئەمدى تىلغا ئالمايمىز.»",p:"«Pergunta como passámos estes anos? Continuamos a beber chá, continuamos a cozer naan. Só há menos umas pessoas à mesa, e já não dizemos os nomes delas.»",
+  wz:"一位茶馆老人",we:"An old man at a teahouse",wu:"چايخانىدىكى بىر بوۋاي",wp:"Um velho numa casa de chá"},
+];
+function epilogueHTML(){
+  if(!G) return "";
+  const L=(typeof LANG==="undefined")?"zh":LANG; const k={zh:"z",en:"e",ug:"u",pt:"p"}[L]||"z"; const wk={zh:"wz",en:"we",ug:"wu",pt:"wp"}[L]||"wz";
+  const fates=_epiFates();
+  const voices=_VOICES.filter(v=>{ try{ return v.c(); }catch(e){ return false; } }).slice(0,3);
+  const cs=_consc(), cp=G.complicity||0;
+  const close=cs>=6?{z:"这套系统需要每个人相信自己只是一颗螺丝钉。你后来才明白：螺丝钉也可以拒绝拧紧。",e:"This system needs everyone to believe they are only a screw. You understood later: a screw can also refuse to tighten.",u:"بۇ سىستېما ھەممە ئادەمنىڭ ئۆزىنى پەقەت بىر بۇرما مىخ دەپ ئىشىنىشىگە موھتاج. سىز كېيىن چۈشەندىڭىز: بۇرما مىخمۇ چىڭىتىلىشنى رەت قىلالايدۇ.",p:"Este sistema precisa que cada um acredite que é só um parafuso. Percebeste mais tarde: um parafuso também se pode recusar a apertar."}
+   :cp>=5?{z:"档案里，你的履历干净、完整、无可挑剔。那些空了的座位，不在任何一份档案里。",e:"In the files, your record is clean, complete, impeccable. The empty seats are in no file at all.",u:"ئارخىپتا سىزنىڭ تەرجىمىھالىڭىز پاكىز، تولۇق، ھېچ قۇسۇرسىز. ئۇ بوشاپ قالغان ئورۇنلار ھېچقانداق ئارخىپتا يوق.",p:"Nos arquivos, o teu currículo é limpo, completo, impecável. Os lugares vazios não estão em arquivo nenhum."}
+   :{z:"你做过一些选择，也回避过很多选择。回避，也是一种选择。",e:"You made some choices, and avoided many more. Avoiding is also a choice.",u:"سىز بەزى تاللاشلارنى قىلدىڭىز، نۇرغۇن تاللاشلاردىن قاچتىڭىز. قېچىشمۇ بىر خىل تاللاش.",p:"Fizeste algumas escolhas e evitaste muitas mais. Evitar também é uma escolha."};
+  const H={after:{z:"后来",e:"Afterwards",u:"كېيىن",p:"Depois"},voices:{z:"他们的声音",e:"Their voices",u:"ئۇلارنىڭ ئاۋازى",p:"As vozes deles"},nb:{z:"私人笔记",e:"Private notebook",u:"شەخسىي خاتىرە",p:"Caderno privado"}};
+  const nbLine=(G.notebook||0)>0?`<p>📓 ${H.nb[k]}: ${G.notebook} ${_dd("页","pages","بەت","páginas")} · 🎁 ${(G.collection||[]).length}</p>`:"";
+  return `<div class="go-epi" data-ks="epi">
+    ${fates.length?`<h4>— ${H.after[k]} —</h4>${fates.map(f=>`<p>${f[k]}</p>`).join("")}`:""}
+    <h4>— ${H.voices[k]} —</h4>
+    ${voices.map(v=>`<div class="voice">${v[k]}<i>—— ${v[wk]}</i></div>`).join("")}
+    ${nbLine}
+    <p style="margin-top:8px;color:#5a4a2a"><b>${close[k]}</b></p>
+  </div>`;
+}
+function resistEndHTML(){
+  const E=RESIST_END[G.gameOver]; const L=(typeof LANG==="undefined")?"zh":LANG; const k={zh:"z",en:"e",ug:"u",pt:"p"}[L]||"z";
+  const d=E.d(); const years=Math.floor(G.week/52), wks=G.week%52;
+  const CY=_dd(C.country,"Darkanstan","دارقانستان","Darkanstão");
+  return `<div class="scene"><img src="${skylineURL()}" alt="">
+      <div class="scene-in"><div><h1>★ ${_dd(C.country+"·"+C.city+"维稳指挥系统","Darkanstan · Kala City Stability-Maintenance Command System","دارقانستان · كالا شەھىرى مۇقىملىقنى ساقلاش قوماندانلىق سىستېمىسى","Darkanstão · Sistema de Comando de Manutenção da Estabilidade da Cidade de Kala")}</h1><div class="sub">${_dd("终端编号 KL-704 ｜ 已注销","Terminal No. KL-704 ｜ Deactivated","تېرمىنال نومۇرى KL-704 ｜ ئەمەلدىن قالدۇرۇلدى","Terminal n.º KL-704 ｜ Desativado")}</div></div></div></div>
+    <div class="go-screen"><div class="go-paper paper">
+      <div class="dossier-head"><span>${_dd(C.country+"内务部 · 内部情况通报","Darkanstan Ministry of the Interior · Internal Incident Notice","دارقانستان ئىچكى ئىشلار مىنىستىرلىكى · ئىچكى ئەھۋال ئۇقتۇرۇشى","Ministério do Interior do Darkanstão · Comunicado interno")}</span><span>${_dd("绝密","Top Secret","قەتئىي مەخپىي","Ultrassecreto")}</span></div>
+      <div class="go-stamp" style="color:${E.c}">${E.stamp[k]}</div>
+      <h2 class="go-title" style="color:${E.c}">${E.t[k]}</h2>
+      <div class="go-ending" style="color:${E.c}"><div class="go-e-d">${d[k]}</div></div>
+      <div class="go-body">
+        <p>${_dd("任期","Term served","ۋەزىپە مۇددىتى","Tempo de mandato")} <b>${_dd(`${years}年${wks}周`,`${years}y ${wks}w`,`${years}-يىل ${wks}-ھەپتە`,`${years}a ${wks}s`)}</b></p>
+        <div class="go-stats">
+          <div class="gs"><div class="lb">${_dd("拘押","Detained","قامالغان","Detidos")}</div><div class="vl" style="color:#9c2f27">${G.detainedCount}</div></div>
+          <div class="gs"><div class="lb">${_dd("伤亡","Casualties","قۇربان","Vítimas")}</div><div class="vl" style="color:#9c2f27">${G.casualties}</div></div>
+          <div class="gs"><div class="lb">${_dd("笔记","Notebook","خاتىرە","Caderno")}</div><div class="vl" style="color:#3c5a8a">${G.notebook||0}</div></div>
+          <div class="gs"><div class="lb">${_dd("遗物","Relics","يادىكارلىق","Relíquias")}</div><div class="vl" style="color:#6b4f14">${(G.collection||[]).length}</div></div>
+        </div>
+      </div>
+      ${epilogueHTML()}
+      <div class="go-btns"><button class="mbtn" onclick="initGame();render()">${_dd("✒ 重新开始（新任期）","✒ Restart (new term)","✒ قايتا باشلاش (يېڭى مۇددەت)","✒ Recomeçar (novo mandato)")}</button></div>
+      <div class="go-foot">${_dd("本游戏设定于虚构国家「"+C.country+"」。任何把文化习俗标记为「威胁」的系统，本身就是最大的威胁。","This game is set in the fictional nation of 「"+CY+"」. Any system that labels cultural customs as \"threats\" is itself the greatest threat.","بۇ ئويۇن خىيالىي دۆلەت «"+CY+"»دا يۈز بېرىدۇ. مەدەنىيەت ۋە ئۆرپ-ئادەتلەرنى «تەھدىت» دەپ بەلگىلىگەن ھەرقانداق سىستېمىنىڭ ئۆزى ئەڭ چوڭ تەھدىت.","Este jogo passa-se na nação fictícia de «"+CY+"». Qualquer sistema que rotule costumes culturais como «ameaças» é, ele próprio, a maior ameaça.")}</div>
+    </div></div>`;
 }
 
 // Boot
