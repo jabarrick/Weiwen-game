@@ -186,6 +186,11 @@ tr.clickable:hover{background:rgba(255,255,255,.045)}
   letter-spacing:8px;color:var(--red2);background:rgba(10,10,12,.25);text-shadow:1px 1px 0 rgba(0,0,0,.5);
   animation:stampin .28s steps(3) both}
 @keyframes stampin{0%{transform:scale(2.4) rotate(-10deg);opacity:0}100%{transform:scale(1) rotate(-10deg);opacity:.93}}
+@media(max-width:640px){ #stampfx.on .sfi{font-size:16px;border-width:3px;padding:3px 14px;letter-spacing:3px;max-width:86vw;white-space:nowrap} }
+#stampfx.anch{right:auto;display:block;transform:translate(-50%,-50%)}
+#stampfx.anch .sfi{font-size:12px;border-width:3px;padding:1px 6px;white-space:nowrap;background:rgba(20,22,26,.55);letter-spacing:1px}
+#stampfx.low{top:auto;bottom:calc(14px + env(safe-area-inset-bottom,0px))}
+#stampfx.low .sfi{font-size:15px;border-width:3px;padding:2px 12px;max-width:86vw;white-space:nowrap;overflow:hidden;background:rgba(20,22,26,.6);letter-spacing:2px}
 
 /* ── choice event: urgent telegram ── */
 .choice{margin-bottom:14px;padding:0 0 12px}
@@ -338,6 +343,19 @@ html[dir="rtl"] .wiki-body{padding-right:0;padding-left:8px}
 .go-epi .voice{margin:6px 0 8px;padding:6px 10px;border-inline-start:3px solid #8a6a2a;background:rgba(90,70,30,.07);font-style:normal}
 .go-epi .voice i{display:block;font-style:normal;color:var(--ink2);font-size:11px;margin-top:2px}
 .notebook-line{color:#c9a038}
+/* ── 手机布局补丁 v9：长按钮换行、下拉框不撑破、AI 页上下排列 ── */
+.boot-btns .mbtn{white-space:normal;overflow-wrap:anywhere;line-height:1.45}
+select{max-width:100%}
+@media(max-width:640px){
+  .boot-btns .mbtn{letter-spacing:1px}
+  .nfx{white-space:normal}
+  .ai-cols{flex-direction:column}
+  .scene-in>div:first-child{min-width:0;flex:1}
+  .scene-right{flex-shrink:0;white-space:nowrap}
+  .scene-right .wksub{font-size:10px}
+  .scene-right .icon-btn{white-space:nowrap;padding:1px 6px}
+  .boot-paper{padding-bottom:110px}
+}
 
 .go-stamp{position:relative;top:auto;right:auto;display:table;margin:18px 28px -2px auto;max-width:70%;text-align:center;font-size:15px}
 html[dir="rtl"] .go-stamp{margin:18px auto -2px 28px}
@@ -2537,7 +2555,7 @@ function manualArrest(id){
   G.people.filter(x=>x.fid===p.fid&&!x.detained).forEach(fm=>addTagIfRoom(fm,"t_flag"));
   addNews((typeof _nbt==="function")?_nbt(`${C.player}指挥长亲自下令带走 ${p.name}（${G.families[p.fid].surname}氏）。家属在派出所门口苦等，被告知「依法办理、随后通知」。`,`Commander ${C.player} personally ordered ${p.name} (of the ${G.families[p.fid].surname} family) taken away. Relatives waited in anguish at the police-station door, told only "handled according to law, notification to follow."`,`قوماندان ${C.player} شەخسەن بۇيرۇق چۈشۈرۈپ ${p.name} نى (${G.families[p.fid].surname} جەمەتىدىن) ئېلىپ كەتتۈردى. ئائىلە تاۋابىئاتى ساقچى ئىدارىسىنىڭ ئالدىدا ئازابلىق كۈتتى، ئۇلارغا پەقەت «قانۇن بويىچە بىر تەرەپ قىلىنىدۇ، كېيىن ئۇقتۇرۇلىدۇ» دېيىلدى.`,`O Comandante ${C.player} ordenou pessoalmente que ${p.name} (da família ${G.families[p.fid].surname}) fosse levado. Os familiares esperaram angustiados à porta da esquadra, e só lhes disseram «tratado segundo a lei, notificação a seguir».`):`${C.player}指挥长亲自下令带走 ${p.name}（${G.families[p.fid].surname}氏）。家属在派出所门口苦等，被告知「依法办理、随后通知」。`);
   G.selPerson=null;
-  SFX.stamp(); stampFX("逮 捕");
+  SFX.stamp(); stampFX(_dd("逮 捕","ARRESTED","قولغا ئېلىندى","DETIDO"));
   render();
   saveGame(true);
 }
@@ -3086,7 +3104,7 @@ function render(){
     <div class="scene-in">
       <div><h1>★ ${C.country}·${C.city}维稳指挥系统</h1><div class="sub">指挥长：${C.player} ｜ 机密 ｜ 任期剩余 ${yearsLeft} 年</div></div>
       <div class="scene-right"><div class="wk">${ywLabel(G.week)}</div><div class="wksub">总第${G.week}周</div>
-        <button class="icon-btn" onclick="SFX.toggle()" title="${_dd("音效开关 (M)","Sound on/off (M)","ئاۋاز ئېچىش/ئېتىش (M)","Som ligado/desligado (M)")}">${SFX.muted?"♪ 关":"♪ 开"}</button>
+        <button class="icon-btn" onclick="SFX.toggle()" title="${_dd("音效开关 (M)","Sound on/off (M)","ئاۋاز ئېچىش/ئېتىش (M)","Som ligado/desligado (M)")}">${SFX.muted?_dd("♪ 关","♪ Off","♪ ئېتىك","♪ Desligado"):_dd("♪ 开","♪ On","♪ ئوچۇق","♪ Ligado")}</button>
       </div>
     </div>
   </div>
@@ -3403,7 +3421,7 @@ function render(){
       ${G.aiRunning?`<span style="font-size:12px;color:var(--grn);font-weight:700">● 运行中</span>`:""}
     </div>
     <div style="font-size:12px;color:var(--mt);margin-bottom:10px">${ywLabel(G.week)} ｜ 经费${G.budget.toFixed(2)} 行动${G.ap}/${G.maxAp} 民怨${Math.round(G.resentment)} 伤亡${G.casualties} ｜ 自由${C.org}${getFreeSta()}（识${G.people.filter(p=>!p.detained&&p.tags.has("t_sta")&&p.staKnown).length}）阈值${G.winThreshold}${G.gameOver?` ｜ <b style="color:var(--ylw)">已结束：${G.gameOver}</b>`:""}</div>
-    <div style="display:flex;gap:10px">
+    <div class="ai-cols" style="display:flex;gap:10px">
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:700;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--bdr)">🤖 AI 操作日志（${G.aiLog.length}）</div>
         <div data-ks="ailog" style="max-height:380px;overflow-y:auto;font-size:12px">`;
@@ -3857,12 +3875,25 @@ function _news3(t){
   return out;
 }
 // 兜底：历史/旧存档条目按当前语言尽力转换；氛围类通报确定性地换成同类条目
+// 旧存档里只存了中文的「你的抉择」通报：按事件原文前缀找回对应事件，用当前语言重写
+function _retroChoice(t,L){
+  const m=/^🎯\s*【你的抉择】(.*?)(?:……)?\s*→\s*([\s\S]*)$/.exec(t); if(!m||typeof CHOICE_EVENTS==="undefined") return null;
+  const strip=s=>String(s||"").replace(/<[^>]+>/g,"").replace(/^[^\s]+\s/,"");
+  const head=strip(m[1]).replace(/[A-Za-z\u0600-\u06FF ]+/g,"").slice(0,12);
+  let ev=null; for(const e of CHOICE_EVENTS){ let z; try{ z=strip(_chT(e.text,"zh")); }catch(_){ continue; } if(head&&z.replace(/[A-Za-z\u0600-\u06FF ]+/g,"").indexOf(head)===0){ ev=e; break; } }
+  const lab={en:"Your Choice",ug:"سىزنىڭ قارارىڭىز",pt:"A tua escolha"}[L]||"Your Choice";
+  const arch={en:"(archived telegram; details kept in the original record)",ug:"(ئارخىپقا ئېلىنغان تېلېگرامما؛ تەپسىلاتى ئەسلى خاتىرىدە)",pt:"(telegrama arquivado; os pormenores ficaram no registo original)"}[L]||"";
+  let tx=""; if(ev){ try{ tx=strip(_chT(ev.text,L)); }catch(_){ tx=""; } if(/[\u4e00-\u9fff]/.test(tx)) tx=""; if(tx.length>110) tx=tx.slice(0,110)+"…"; }
+  let res=""; const d=I18N[L]; const r=m[2].trim(); if(d&&d[r]) res=d[r]; else if(typeof TOAST_TX!=="undefined"&&TOAST_TX[r]&&TOAST_TX[r][L]) res=TOAST_TX[r][L];
+  return `🎯 【${lab}】${tx?tx+" → ":""}${res||arch}`;
+}
 function _retroNews(t){
   const L=(typeof LANG==="undefined")?"zh":LANG;
   if(L!=="zh" && !/[一-鿿]/.test(t)) return t;
   if(L==="zh" && /[一-鿿]/.test(t)) return t;
   if(L!=="zh"){ const d=I18N[L]; if(d&&d[t]) return d[t];
-    if(typeof STORY_TX!=="undefined"&&STORY_TX[t]&&STORY_TX[t][L]) return STORY_TX[t][L]; }
+    if(typeof STORY_TX!=="undefined"&&STORY_TX[t]&&STORY_TX[t][L]) return STORY_TX[t][L];
+    const ch=_retroChoice(t,L); if(ch) return ch; }
   const kind=/【特急】|【URGENT】|【جىددىي】/.test(t)?"A":/^📈|〔舆情|〔内参/.test(t)?"R":/督查|巡视|审计|机要电报|绩效考核|〔机密〕|一票否决|黄牌|红牌|整改/.test(t)?"B":"G";
   let arr=null;
   if(L==="zh"){ const zp={G:(typeof NEWS_G!=="undefined")?NEWS_G:null,B:(typeof NEWS_B!=="undefined")?NEWS_B:null,A:(typeof NEWS_A!=="undefined")?NEWS_A:null,R:(typeof NEWS_R!=="undefined")?NEWS_R:null}; arr=zp[kind]; }
@@ -3875,7 +3906,7 @@ function _newsText(n){
   const L=(typeof LANG==="undefined")?"zh":LANG;
   const k={zh:"z",en:"e",ug:"u",pt:"p"}[L];
   if(L==="pt"&&n&&typeof n==="object"&&!n.p){ const e=n.e||(n.l==="en"?n.t:null); if(e){ const r=_P(e); if(r!==e) return r; } const zt=n.z||(n.l==="zh"?n.t:null); if(zt) return _retroNews(zt); }
-  if(n&&typeof n==="object"){ if(n[k]) return n[k]; const t=n.t||""; if(n.l===L) return t; return _retroNews(t); }
+  if(n&&typeof n==="object"){ if(n[k]&&!(L!=="zh"&&/[\u4e00-\u9fff]/.test(n[k]))) return n[k]; if(n[k]&&(n.z||n.l==="zh")) return _retroNews(n.z||n.t); const t=n.t||""; if(n.l===L) return t; return _retroNews(t); }
   return n;
 }
 function _pnoun(s){ if(typeof LANG==="undefined"||LANG==="zh"||!s) return s; const m=_PNOUN[LANG]; if(m){ for(const [a,b] of m) if(s.indexOf(a)>=0) s=s.split(a).join(b); }
@@ -5118,10 +5149,22 @@ function stampFX(text,color){
   const inner=el.querySelector(".sfi");
   inner.textContent=text;
   inner.style.color=color||"var(--red2)";
-  el.classList.remove("on");void el.offsetWidth;el.classList.add("on");
-  clearTimeout(stampFX._t);
-  stampFX._t=setTimeout(()=>el.classList.remove("on"),1000);
+  // 印章盖在刚点的按钮上（按钮区没有数据），不再压住数据卡/措施卡上的数字。
+  // 没有可用的点击位置（快捷键等）时：手机端缩到屏幕底部，电脑端居中。
+  const a=stampFX._anchor, now=Date.now();
+  el.classList.remove("on","anch","low"); el.style.cssText="";
+  const fresh=a && now-a.t<800 && a.r.width>0;
+  if(!fresh && window.innerWidth<=640) el.classList.add("low");
+  const show=()=>{ void el.offsetWidth; el.classList.add("on");
+    clearTimeout(stampFX._t); stampFX._t=setTimeout(()=>el.classList.remove("on"),el.classList.contains("anch")?750:900); };
+  if(!fresh){ show(); return; }
+  // 等本次重绘完成后，按同一个按钮（onclick 相同）的新位置定位
+  const place=()=>{ let r=a.r; if(a.key){ const nb=[...document.querySelectorAll("button")].find(b=>b.getAttribute("onclick")===a.key); if(nb){ const q=nb.getBoundingClientRect(); if(q.width>0) r=q; } }
+    el.classList.add("anch"); el.style.left=Math.round(r.left+r.width/2)+"px"; el.style.top=Math.round(r.top+r.height/2)+"px"; show(); };
+  (window.requestAnimationFrame||setTimeout)(place);
 }
+stampFX._anchor=null;
+document.addEventListener("click",e=>{ const b=e.target&&e.target.closest&&e.target.closest("button"); if(b) stampFX._anchor={t:Date.now(),r:b.getBoundingClientRect(),key:b.getAttribute("onclick")}; },true);
 
 // ── 每周收入（advanceWeek 与顶部显示共用，保证口径一致）──
 function weeklyIncome(){
